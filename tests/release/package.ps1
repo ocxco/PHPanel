@@ -31,9 +31,15 @@ try {
         try {
             $entries=@($archive.Entries | ForEach-Object {$_.FullName.Replace('\','/')})
             if($entries | Where-Object {$_ -match '/(packages|instances|sites|state|downloads)/'}){throw 'Runtime data included in Portable'}
-            foreach($name in @('PHPanel.exe','phpanel-cli.exe','phpanel-service.exe','portable.flag','README.md','docs/packaging.md')) {
+            if($entries | Where-Object {$_ -match '(^|/)docs(/|$)'}){throw 'Documentation directory included in Portable'}
+            foreach($name in @('PHPanel.exe','phpanel-cli.exe','phpanel-service.exe','portable.flag','README.md')) {
                 if($entries -notcontains ('PHPanel-0.1.0-windows-x64-portable/'+$name)){throw ('Missing payload entry: '+$name)}
             }
+            $readmeEntry=$archive.GetEntry('PHPanel-0.1.0-windows-x64-portable/README.md')
+            $reader=[IO.StreamReader]::new($readmeEntry.Open())
+            try {$readme=$reader.ReadToEnd()} finally {$reader.Dispose()}
+            if($readme.Contains('](docs/')){throw 'Packaged README links to excluded documentation'}
+            if(-not $readme.Contains('](https://github.com/ocxco/PHPanel/blob/main/docs/')){throw 'Packaged README is missing online documentation links'}
         } finally {$archive.Dispose()}
     }
     Write-Output 'Packaging tests passed: payload isolation, required files, and checksum refresh.'

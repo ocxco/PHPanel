@@ -101,8 +101,9 @@ try {
         if(-not (Test-Path -LiteralPath $file -PathType Leaf)){throw ('Missing release binary: '+$file)}
         Copy-Item -LiteralPath $file -Destination $payload
     }
-    Copy-Item -LiteralPath README.md -Destination $payload
-    Copy-SourceTree (Join-Path $projectRoot 'docs') (Join-Path $payload 'docs')
+    $readme=Get-Content -LiteralPath README.md -Raw
+    $readme=$readme.Replace('](docs/','](https://github.com/ocxco/PHPanel/blob/main/docs/')
+    [IO.File]::WriteAllText((Join-Path $payload 'README.md'),$readme,[Text.UTF8Encoding]::new($false))
     $outputs=@()
     $baseName='PHPanel-'+$Version+'-windows-x64'
     if($Target -ne 'Installer') {

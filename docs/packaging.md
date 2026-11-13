@@ -53,7 +53,7 @@ dist/
   PHPanel-0.1.0-windows-x64-SHA256SUMS.txt
 ```
 
-Portable 包含三个 EXE、README、系统说明文档以及 `portable.flag`。解压后运行 PHPanel.exe，环境数据默认位于 EXE 旁；有便携标记时，WebView2 浏览器缓存也默认位于数据目录的 `state/webview2`。显式的 `PHPANEL_DATA_DIR` 和 `PHPANEL_WEBVIEW_PROFILE_DIR` 设置仍优先。
+安装包和 Portable 均包含三个 EXE 与 README，不包含 `docs` 目录；包内 README 的文档链接指向 GitHub 在线文档。Portable 额外包含 `portable.flag`。解压后运行 PHPanel.exe，环境数据默认位于 EXE 旁；有便携标记时，WebView2 浏览器缓存也默认位于数据目录的 `state/webview2`。显式的 `PHPANEL_DATA_DIR` 和 `PHPANEL_WEBVIEW_PROFILE_DIR` 设置仍优先。
 
 ## 安装与卸载
 
@@ -61,7 +61,7 @@ Portable 包含三个 EXE、README、系统说明文档以及 `portable.flag`。
 
 升级前检查目标目录中的程序是否仍在运行或不可写；需要用户退出面板，并停止使用该目录的系统服务和 PHP 托管程序。安装器不直接结束进程。
 
-卸载前检查是否仍有使用该程序目录的 PHPanel 系统服务，存在时要求先在面板中停止并注销。卸载只删除明确列出的程序文件及快捷方式，保留环境、数据库、网站、缓存和说明文档。当前用户的安装目录 CLI PATH 条目，以及指向此 EXE 的登录启动项会清理，其它条目保留。
+卸载前检查是否仍有使用该程序目录的 PHPanel 系统服务，存在时要求先在面板中停止并注销。卸载只删除明确列出的程序文件及快捷方式，保留环境、数据库、网站和缓存；旧版本安装时留下的 `docs` 目录也会保留。当前用户的安装目录 CLI PATH 条目，以及指向此 EXE 的登录启动项会清理，其它条目保留。
 
 ## WebView2 与国内网络
 
@@ -77,7 +77,7 @@ Portable 依赖本机 WebView2 Runtime，不自动执行依赖安装程序。
 
 ## 验证范围
 
-生成过程验证构建命令与编译器返回码，输出版本对应的 SHA-256 清单。单元测试覆盖便携缓存目录、卸载保护与 PATH 保留。`tests/release/package.ps1` 验证发布文件、运行数据隔离，以及重复打包后的校验清单刷新：
+生成过程验证构建命令与编译器返回码，输出版本对应的 SHA-256 清单。单元测试覆盖便携缓存目录、卸载保护与 PATH 保留。`tests/release/package.ps1` 验证发布文件、运行数据隔离、排除 `docs` 目录、包内 README 的在线文档链接，以及重复打包后的校验清单刷新：
 
 ```powershell
 .\tests\release\package.ps1

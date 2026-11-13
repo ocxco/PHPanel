@@ -102,7 +102,6 @@ Section "PHPanel"
   File "${PACKAGE_DIR}\phpanel-cli.exe"
   File "${PACKAGE_DIR}\phpanel-service.exe"
   File "${PACKAGE_DIR}\README.md"
-  File /r "${PACKAGE_DIR}\docs"
   ; Never copy the developer's state, packages, instances or databases.
   Delete "$INSTDIR\portable.flag"
   CreateDirectory "$SMPROGRAMS\PHPanel"
