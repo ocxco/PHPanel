@@ -42,7 +42,9 @@ func acquireRuntimeLease(root string, i Instance) (*runtimeLease, error) {
 		}
 		sa := windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), SecurityDescriptor: sd}
 		h, err := windows.CreateMutex(&sa, false, name)
-		if err != nil {
+		// ERROR_ALREADY_EXISTS still returns a valid handle. Ownership is
+		// determined by the wait below, and every opened handle must be closed.
+		if err != nil && err != windows.ERROR_ALREADY_EXISTS {
 			result <- fmt.Errorf("无法取得实例运行锁: %w", err)
 			return
 		}
@@ -57,6 +59,7 @@ func acquireRuntimeLease(root string, i Instance) (*runtimeLease, error) {
 		_ = windows.ReleaseMutex(h)
 	}()
 	if err := <-result; err != nil {
+		<-lease.done
 		return nil, err
 	}
 	return lease, nil
