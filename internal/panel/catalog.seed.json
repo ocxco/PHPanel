@@ -1,0 +1,437 @@
+[
+  {
+    "id": "php-14ae3250d4447c8ccfc4c45a",
+    "component": "php",
+    "version": "7.4.33",
+    "publisher": "PHP 官方",
+    "sha256": "14ae3250d4447c8ccfc4c45a70d90adfbcd61e728d85f0be56a7ddf8f9c8aace",
+    "sources": [
+      {
+        "name": "PHP 官方",
+        "url": "https://downloads.php.net/~windows/releases/php-7.4.33-nts-Win32-vc15-x64.zip"
+      }
+    ],
+    "verification": "PHP 官方发布摘要",
+    "build": "nts-vc15-x64"
+  },
+  {
+    "id": "php-dfb70498ffa2c617f2f655a1",
+    "component": "php",
+    "version": "8.0.30",
+    "publisher": "PHP 官方",
+    "sha256": "dfb70498ffa2c617f2f655a155564697e3c9cca41709938fd1a5997d1d5b0785",
+    "sources": [
+      {
+        "name": "PHP 官方",
+        "url": "https://downloads.php.net/~windows/releases/php-8.0.30-nts-Win32-vs16-x64.zip"
+      }
+    ],
+    "verification": "PHP 官方发布摘要",
+    "build": "nts-vs16-x64"
+  },
+  {
+    "id": "php-9cfe246cb144076c16f5913a",
+    "component": "php",
+    "version": "8.1.34",
+    "publisher": "PHP 官方",
+    "sha256": "9cfe246cb144076c16f5913a3ef88a474c3dd7e60f0f0c8bb95faf68674016cc",
+    "sources": [
+      {
+        "name": "PHP 官方",
+        "url": "https://downloads.php.net/~windows/releases/php-8.1.34-nts-Win32-vs16-x64.zip"
+      }
+    ],
+    "verification": "PHP 官方发布摘要",
+    "build": "nts-vs16-x64"
+  },
+  {
+    "id": "php-ebe75134c03869826cb1714d",
+    "component": "php",
+    "version": "8.2.35-1",
+    "publisher": "PHP 官方",
+    "sha256": "ebe75134c03869826cb1714d31fd5eb96afefa6d9fd35d786971c03020e7bce2",
+    "sources": [
+      {
+        "name": "PHP 官方",
+        "url": "https://downloads.php.net/~windows/releases/php-8.2.35-1-nts-Win32-vs16-x64.zip"
+      }
+    ],
+    "verification": "PHP 官方发布摘要",
+    "build": "nts-vs16-x64"
+  },
+  {
+    "id": "php-1a097d52b7a68622cdc72307",
+    "component": "php",
+    "version": "8.3.36-1",
+    "publisher": "PHP 官方",
+    "sha256": "1a097d52b7a68622cdc723073b61cc70caf79c941218ff65b2d8441dbc6b10d4",
+    "sources": [
+      {
+        "name": "PHP 官方",
+        "url": "https://downloads.php.net/~windows/releases/php-8.3.36-1-nts-Win32-vs16-x64.zip"
+      }
+    ],
+    "verification": "PHP 官方发布摘要",
+    "build": "nts-vs16-x64"
+  },
+  {
+    "id": "php-dbae154a0a89791f36c3d48e",
+    "component": "php",
+    "version": "8.4.27-1",
+    "publisher": "PHP 官方",
+    "sha256": "dbae154a0a89791f36c3d48e68bae797878333e7d6cb5721e74617de59b63ab7",
+    "sources": [
+      {
+        "name": "PHP 官方",
+        "url": "https://downloads.php.net/~windows/releases/php-8.4.27-1-nts-Win32-vs17-x64.zip"
+      }
+    ],
+    "verification": "PHP 官方发布摘要",
+    "build": "nts-vs17-x64"
+  },
+  {
+    "id": "php-2a36a2edcb7a5b9252f638fd",
+    "component": "php",
+    "version": "8.5.12-1",
+    "publisher": "PHP 官方",
+    "sha256": "2a36a2edcb7a5b9252f638fd5e4cf84d7f6e066092654220dc0b63e5cf4e9723",
+    "sources": [
+      {
+        "name": "PHP 官方",
+        "url": "https://downloads.php.net/~windows/releases/php-8.5.12-1-nts-Win32-vs17-x64.zip"
+      }
+    ],
+    "verification": "PHP 官方发布摘要",
+    "build": "nts-vs17-x64"
+  },
+  {
+    "id": "redis-8000848c48668c8cd32f2138",
+    "component": "redis",
+    "version": "8.10.3",
+    "publisher": "redis-windows 社区",
+    "sha256": "8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de11ff8ebf9e",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.10.3/Redis-8.10.3-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "redis-6de5cc7f5adbf97b5928b137",
+    "component": "redis",
+    "version": "8.10.2",
+    "publisher": "redis-windows 社区",
+    "sha256": "6de5cc7f5adbf97b5928b13766383d4ad424626ef3d8b313ffff12d820ec6fc1",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.10.2/Redis-8.10.2-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "redis-bb19f830ca5bf62718e81f23",
+    "component": "redis",
+    "version": "8.8.3",
+    "publisher": "redis-windows 社区",
+    "sha256": "bb19f830ca5bf62718e81f230833f968b90ecfd675557caf3c1478c4e65bd98c",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.8.3/Redis-8.8.3-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "redis-69574ff3e47b472d2f6f9337",
+    "component": "redis",
+    "version": "8.6.7",
+    "publisher": "redis-windows 社区",
+    "sha256": "69574ff3e47b472d2f6f933751dba9b60f93069f0dfa3147fc90054017ce1939",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.6.7/Redis-8.6.7-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "redis-8bc1c546bb7b6508fd4dbe64",
+    "component": "redis",
+    "version": "8.4.7",
+    "publisher": "redis-windows 社区",
+    "sha256": "8bc1c546bb7b6508fd4dbe64fabbf63dbaaf04efeca8a6397856da74c80757da",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.4.7/Redis-8.4.7-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "redis-92d9bdde87ed52bf859a677e",
+    "component": "redis",
+    "version": "8.2.10",
+    "publisher": "redis-windows 社区",
+    "sha256": "92d9bdde87ed52bf859a677e5197d8ac855ba78d9940d457881723ae960df429",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.2.10/Redis-8.2.10-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "redis-5532f2cc38a0185556b648d2",
+    "component": "redis",
+    "version": "8.10.1",
+    "publisher": "redis-windows 社区",
+    "sha256": "5532f2cc38a0185556b648d25a0c2ff1cc58029f37fd76eceb38736976dcb056",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.10.1/Redis-8.10.1-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "redis-9e603ad77224b30ac090ba96",
+    "component": "redis",
+    "version": "8.8.2",
+    "publisher": "redis-windows 社区",
+    "sha256": "9e603ad77224b30ac090ba963735b6a014373f6510001f0d9af3b8c3415b9a17",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.8.2/Redis-8.8.2-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "redis-1a83ebbc52f302fb9a2de276",
+    "component": "redis",
+    "version": "8.6.6",
+    "publisher": "redis-windows 社区",
+    "sha256": "1a83ebbc52f302fb9a2de2764bb96c1da9075f7988c9f9e9e1450edb759d8658",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.6.6/Redis-8.6.6-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "redis-58b45cb89fa2ccd99f9814ad",
+    "component": "redis",
+    "version": "8.4.6",
+    "publisher": "redis-windows 社区",
+    "sha256": "58b45cb89fa2ccd99f9814adb77b6c459a794f78f89a38335205829db6990b0f",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.4.6/Redis-8.4.6-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "redis-894f381f544fc98977f37d46",
+    "component": "redis",
+    "version": "8.2.9",
+    "publisher": "redis-windows 社区",
+    "sha256": "894f381f544fc98977f37d46c3cd713ff1c2778de1fc77e0300fd80afa8496dd",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.2.9/Redis-8.2.9-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "redis-835999942bbef27e2b01f4a3",
+    "component": "redis",
+    "version": "7.4.11",
+    "publisher": "redis-windows 社区",
+    "sha256": "835999942bbef27e2b01f4a36955522cf19fff6511e67bbfe3fee322f6586705",
+    "sources": [
+      {
+        "name": "GitHub 上游发行页",
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/7.4.11/Redis-7.4.11-Windows-x64-cygwin.zip"
+      }
+    ],
+    "verification": "GitHub Release SHA-256",
+    "build": "Windows x64 / Cygwin"
+  },
+  {
+    "id": "nginx-aad7bf75d669ece7671688bf",
+    "component": "nginx",
+    "version": "1.28.3",
+    "publisher": "Nginx 官方",
+    "sha256": "aad7bf75d669ece7671688bfdf35f1093d6a30d2e62469405f4d55d8d82d5fd3",
+    "sources": [
+      {
+        "name": "Nginx 官方",
+        "url": "https://nginx.org/download/nginx-1.28.3.zip"
+      }
+    ],
+    "verification": "维护者从官方制品核验",
+    "build": "Windows x86 / x64 兼容"
+  },
+  {
+    "id": "nginx-39ca13277b361910f9e463a7",
+    "component": "nginx",
+    "version": "1.26.3",
+    "publisher": "Nginx 官方",
+    "sha256": "39ca13277b361910f9e463a7e958e11566f7ede8a6f0df08a21b659ca92f3662",
+    "sources": [
+      {
+        "name": "Nginx 官方",
+        "url": "https://nginx.org/download/nginx-1.26.3.zip"
+      }
+    ],
+    "verification": "维护者从官方制品核验",
+    "build": "Windows x86 / x64 兼容"
+  },
+  {
+    "id": "mysql-aed661fe8120254a1dc30f5a",
+    "component": "mysql",
+    "version": "5.7.44",
+    "publisher": "MySQL Community 官方",
+    "sha256": "aed661fe8120254a1dc30f5a4d5de346681922f4847cf025e2d4084eca78e70e",
+    "sources": [
+      {
+        "name": "MySQL 官方归档",
+        "url": "https://cdn.mysql.com/archives/mysql-5.7/mysql-5.7.44-winx64.zip"
+      }
+    ],
+    "verification": "维护者从官方制品核验",
+    "build": "Windows x64 / 5.7 历史版本"
+  },
+  {
+    "id": "mysql-a1bc2ad567eef672be20b591",
+    "component": "mysql",
+    "version": "8.0.36",
+    "publisher": "MySQL Community 官方",
+    "sha256": "a1bc2ad567eef672be20b591ad25b14f221e60bde3ae3eb235128d91e4166557",
+    "sources": [
+      {
+        "name": "MySQL 官方归档",
+        "url": "https://cdn.mysql.com/archives/mysql-8.0/mysql-8.0.36-winx64.zip"
+      }
+    ],
+    "verification": "维护者从官方制品核验",
+    "build": "Windows x64 / 8.0"
+  },
+  {
+    "id": "mysql-4d9316d2955b0bd2b484e08b",
+    "component": "mysql",
+    "version": "8.0.44",
+    "publisher": "MySQL Community 官方",
+    "sha256": "4d9316d2955b0bd2b484e08bda67c18d7979e0622b84f2e9146d97f04ed9a2fc",
+    "sources": [
+      {
+        "name": "MySQL 官方归档",
+        "url": "https://cdn.mysql.com/archives/mysql-8.0/mysql-8.0.44-winx64.zip"
+      }
+    ],
+    "verification": "维护者从官方制品核验",
+    "build": "Windows x64 / 8.0"
+  },
+  {
+    "id": "mysql-fb1f0c6cce229be4b3208bec",
+    "component": "mysql",
+    "version": "8.4.0",
+    "publisher": "MySQL Community 官方",
+    "sha256": "fb1f0c6cce229be4b3208bec8a605576bb47eabb00512bccbcc4396af332c25c",
+    "sources": [
+      {
+        "name": "MySQL 官方归档",
+        "url": "https://cdn.mysql.com/archives/mysql-8.4/mysql-8.4.0-winx64.zip"
+      }
+    ],
+    "verification": "维护者从官方制品核验",
+    "build": "Windows x64 / 8.4 LTS"
+  },
+  {
+    "id": "mysql-b6c152f9f3aaa7294eb47db6",
+    "component": "mysql",
+    "version": "8.4.6",
+    "publisher": "MySQL Community 官方",
+    "sha256": "b6c152f9f3aaa7294eb47db698e47974d37b261bf3cab4f90dc1243bb5ecd204",
+    "sources": [
+      {
+        "name": "MySQL 官方归档",
+        "url": "https://cdn.mysql.com/archives/mysql-8.4/mysql-8.4.6-winx64.zip"
+      }
+    ],
+    "verification": "维护者从官方制品核验",
+    "build": "Windows x64 / 8.4 LTS"
+  },
+  {
+    "id": "mysql-53685bb61a1efc5ecc1b35c1",
+    "component": "mysql",
+    "version": "8.4.8",
+    "publisher": "MySQL Community 官方",
+    "sha256": "53685bb61a1efc5ecc1b35c1b6bd0d30ba799f4943a1ef2c34df464f5a774c7f",
+    "sources": [
+      {
+        "name": "MySQL 官方归档",
+        "url": "https://cdn.mysql.com/archives/mysql-8.4/mysql-8.4.8-winx64.zip"
+      }
+    ],
+    "verification": "维护者从官方制品核验",
+    "build": "Windows x64 / 8.4 LTS"
+  },
+  {
+    "id": "mysql-eb16177f3b61a62d912b7e33",
+    "component": "mysql",
+    "version": "9.0.1",
+    "publisher": "MySQL Community 官方",
+    "sha256": "eb16177f3b61a62d912b7e33e557c94363c972ca91f51bb959cebc28b38ad42c",
+    "sources": [
+      {
+        "name": "MySQL 官方归档",
+        "url": "https://cdn.mysql.com/archives/mysql-9.0/mysql-9.0.1-winx64.zip"
+      }
+    ],
+    "verification": "维护者从官方制品核验",
+    "build": "Windows x64 / 9.0"
+  },
+  {
+    "id": "mysql-108472be53339e91adc5376a",
+    "component": "mysql",
+    "version": "9.3.0",
+    "publisher": "MySQL Community 官方",
+    "sha256": "108472be53339e91adc5376ab261d5304f346c1082bffd08bf66e02d1fb3a372",
+    "sources": [
+      {
+        "name": "MySQL 官方归档",
+        "url": "https://cdn.mysql.com/archives/mysql-9.3/mysql-9.3.0-winx64.zip"
+      }
+    ],
+    "verification": "维护者从官方制品核验",
+    "build": "Windows x64 / 9.3"
+  }
+]

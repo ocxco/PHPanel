@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="160 92 704 839" width="704" height="839" role="img" aria-label="PHPanel">
+  <title>PHPanel</title>
+  <desc>Local PHP development environment management panel. Letter P with a terminal prompt carved in its bowl, flanked by server-rack slots.</desc>
+
+  <g fill="#03155D">
+    <!-- server-rack slots, navy segments -->
+    <rect x="160" y="92"  width="94" height="114"/>
+    <rect x="160" y="317" width="94" height="401"/>
+    <rect x="160" y="826" width="94" height="105"/>
+    <!-- letter P: stem, bowl, 45deg chamfers -->
+    <path d="M291 92 H727 L863 228 V549 L729 684 H448 V930 H291 Z"/>
+  </g>
+
+  <g fill="#4EE1F0">
+    <!-- server-rack slots, cyan segments -->
+    <rect x="160" y="243" width="94" height="35"/>
+    <rect x="160" y="754" width="94" height="35"/>
+    <!-- terminal prompt inside the bowl -->
+    <path d="M448 247 H500 L637 384 L498 523 H448 V483 L547 384 L448 285 Z"/>
+    <!-- caret block -->
+    <rect x="597" y="465" width="104" height="60"/>
+  </g>
+</svg>
