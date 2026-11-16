@@ -13,6 +13,7 @@ import (
 
 type App struct {
 	desktop          *desktopController
+	startHidden      bool
 	explicitDataRoot string
 	elevation        *elevationController
 	elevationResume  *elevationRequest
@@ -23,6 +24,7 @@ type App struct {
 
 func NewApp() *App { a := &App{}; a.configureDesktop(); a.configureElevation(); return a }
 func (a *App) startup(ctx context.Context) {
+	defer close(a.desktop.startupReady)
 	a.ctx = ctx
 	executable, err := os.Executable()
 	if err != nil {

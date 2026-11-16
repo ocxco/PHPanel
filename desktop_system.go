@@ -11,7 +11,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"phpanel/internal/panel"
 )
@@ -43,6 +42,9 @@ type desktopController struct {
 	registry         startupRegistry
 	tray             trayIcon
 	trayError        string
+	startupReady     chan struct{}
+	closePending     bool
+	promptClose      func()
 	hide, show, quit func()
 }
 
@@ -81,28 +83,75 @@ func readDesktopPreferences(root string) panel.SystemSettings {
 	}
 	return result
 }
-func desktopStartState(settings panel.SystemSettings, elevatedRestart bool) options.WindowStartState {
-	if settings.StartMinimized && !elevatedRestart {
-		return options.Minimised
-	}
-	return options.Normal
+func desktopStartHidden(settings panel.SystemSettings, elevatedRestart bool) bool {
+	return settings.StartMinimized && !elevatedRestart
 }
 func desktopInstanceID(root string) string {
 	hash := sha256.Sum256([]byte(strings.ToLower(filepath.Clean(root))))
 	return fmt.Sprintf("PHPanel-%x", hash[:16])
 }
 func (d *desktopController) beforeClose(settings panel.SystemSettings) bool {
-	if d.forceExit.Load() || settings.CloseBehavior != "tray" {
+	if d.forceExit.Load() {
 		return false
 	}
 	d.mu.Lock()
+	if !settings.CloseBehaviorConfirmed {
+		d.closePending = true
+		d.mu.Unlock()
+		d.promptClose()
+		return true
+	}
 	ready := d.tray != nil && d.tray.Ready()
 	d.mu.Unlock()
-	if !ready {
+	if settings.CloseBehavior != "tray" || !ready {
 		return false
 	}
 	d.hide()
 	return true
+}
+func (d *desktopController) trayReady() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.tray != nil && d.tray.Ready()
+}
+func (d *desktopController) pendingCloseChoice() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.closePending
+}
+func (d *desktopController) cancelCloseChoice() {
+	d.mu.Lock()
+	d.closePending = false
+	d.mu.Unlock()
+}
+func (d *desktopController) selectCloseBehavior(settings panel.SystemSettings, behavior string, persist func(panel.SystemSettings) error) error {
+	d.mu.Lock()
+	if !d.closePending || d.forceExit.Load() {
+		d.mu.Unlock()
+		return fmt.Errorf("当前没有待处理的关闭选择")
+	}
+	if behavior != "quit" && behavior != "tray" {
+		d.mu.Unlock()
+		return fmt.Errorf("未知关闭按钮行为")
+	}
+	if behavior == "tray" && (d.tray == nil || !d.tray.Ready()) {
+		d.mu.Unlock()
+		return fmt.Errorf("系统托盘不可用，请选择退出程序")
+	}
+	settings.CloseBehavior = behavior
+	settings.CloseBehaviorConfirmed = true
+	if err := persist(settings); err != nil {
+		d.mu.Unlock()
+		return err
+	}
+	d.closePending = false
+	d.mu.Unlock()
+	if behavior == "quit" {
+		d.exit()
+	} else {
+		d.hide()
+	}
+	return nil
 }
 func (d *desktopController) exit() { d.forceExit.Store(true); d.quit() }
 func (d *desktopController) restore() {
@@ -117,8 +166,8 @@ func (d *desktopController) save(settings panel.SystemSettings, command string, 
 	if err != nil {
 		return err
 	}
-	if settings.CloseBehavior == "tray" && (d.tray == nil || !d.tray.Ready()) {
-		return fmt.Errorf("系统托盘不可用，请使用关闭程序行为")
+	if (settings.StartMinimized || (settings.CloseBehaviorConfirmed && settings.CloseBehavior == "tray")) && (d.tray == nil || !d.tray.Ready()) {
+		return fmt.Errorf("系统托盘不可用，请关闭静默启动并使用退出程序行为")
 	}
 	previous, err := d.registry.Read()
 	if err != nil {
@@ -147,7 +196,13 @@ func (d *desktopController) save(settings panel.SystemSettings, command string, 
 	return nil
 }
 func (a *App) configureDesktop() {
-	a.desktop = &desktopController{registry: newStartupRegistry(), hide: func() { runtime.WindowHide(a.ctx) }, show: func() { runtime.WindowShow(a.ctx); runtime.WindowUnminimise(a.ctx) }, quit: func() { runtime.Quit(a.ctx) }}
+	a.desktop = &desktopController{registry: newStartupRegistry(), startupReady: make(chan struct{}), promptClose: func() { runtime.EventsEmit(a.ctx, "desktop:close-choice") }, hide: func() { runtime.WindowHide(a.ctx) }, show: func() { runtime.WindowShow(a.ctx); runtime.WindowUnminimise(a.ctx) }, quit: func() { runtime.Quit(a.ctx) }}
+}
+func (a *App) finishDesktopStartup(context.Context) {
+	<-a.desktop.startupReady
+	if a.startHidden && (a.initErr != nil || !a.desktop.trayReady()) {
+		a.desktop.restore()
+	}
 }
 func (a *App) startDesktop() {
 	tray, err := newTrayIcon(a.desktop.restore, a.desktop.exit)
@@ -193,4 +248,12 @@ func (a *App) SaveSystemSettings(settings panel.SystemSettings) error {
 	}
 	return a.desktop.save(settings, startupCommand(exe, a.manager.Snapshot().Root), a.manager.SaveSystemSettings)
 }
-func (a *App) ExitApplication() { a.desktop.exit() }
+func (a *App) ExitApplication()            { a.desktop.exit() }
+func (a *App) GetPendingCloseChoice() bool { return a.desktop.pendingCloseChoice() }
+func (a *App) CancelCloseChoice()          { a.desktop.cancelCloseChoice() }
+func (a *App) SelectCloseBehavior(behavior string) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	return a.desktop.selectCloseBehavior(a.manager.Snapshot().Settings.System, behavior, a.manager.SaveSystemSettings)
+}

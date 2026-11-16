@@ -91,9 +91,10 @@ type Settings struct {
 	CatalogURLs        []string       `json:"catalogUrls"`
 }
 type SystemSettings struct {
-	AutoStart      bool   `json:"autoStart"`
-	StartMinimized bool   `json:"startMinimized"`
-	CloseBehavior  string `json:"closeBehavior"`
+	AutoStart              bool   `json:"autoStart"`
+	StartMinimized         bool   `json:"startMinimized"`
+	CloseBehavior          string `json:"closeBehavior"`
+	CloseBehaviorConfirmed bool   `json:"closeBehaviorConfirmed"`
 }
 type CatalogStatus struct {
 	Refreshing  bool     `json:"refreshing"`

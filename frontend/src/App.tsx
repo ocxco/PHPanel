@@ -57,6 +57,7 @@ import {
   type SystemStatus,
 } from "./api";
 import { usePanelState } from "./usePanelState";
+import ClosePrompt from "./ClosePrompt";
 import logoLight from "./assets/logo-light.png";
 import logoDark from "./assets/logo-dark.png";
 
@@ -218,6 +219,18 @@ export default function App() {
   const [restartResume,setRestartResume]=useState<PrivilegeStatus>();
   const [restoredDraft,setRestoredDraft]=useState<AdminRequiredDetail>();
   const [elevationPrompt,setElevationPrompt]=useState<(AdminRequiredDetail & {view:View;elevated:boolean})>();
+  const [closePrompt, setClosePrompt] = useState(false);
+  useEffect(() => {
+    if (!desktop()) return;
+    let active = true;
+    const unsubscribe = window.runtime?.EventsOnMultiple?.(
+      "desktop:close-choice", () => { if (active) setClosePrompt(true); }, -1,
+    );
+    void call<boolean>("GetPendingCloseChoice").then(pending => {
+      if (active && pending) setClosePrompt(true);
+    }).catch(() => {});
+    return () => { active = false; unsubscribe?.(); };
+  }, []);
   useEffect(()=>{
     if(!desktop())return;
     void call<PrivilegeStatus>("GetPrivilegeStatus").then(status=>{setPrivilege(status);if(status.returnView)setRestartResume(status);}).catch(()=>{});
@@ -1406,6 +1419,7 @@ export default function App() {
         )
       )}
       {elevationPrompt&&<Suspense fallback={<div className="modal-backdrop elevation-backdrop"><div className="modal">正在准备授权提示…</div></div>}><ElevationPrompt {...elevationPrompt} close={()=>setElevationPrompt(undefined)}/></Suspense>}
+      {closePrompt && <ClosePrompt close={() => setClosePrompt(false)} />}
     </div>
   );
 }
@@ -1440,7 +1454,7 @@ function SettingsPanel({
   const [systemDraft,setSystemDraft]=useState<SystemSettings>(settings.system||{autoStart:false,startMinimized:false,closeBehavior:"quit"});
   const [systemStatus,setSystemStatus]=useState<SystemStatus>();
   const [systemError,setSystemError]=useState("");
-  useEffect(()=>{setSystemDraft(settings.system||{autoStart:false,startMinimized:false,closeBehavior:"quit"});},[settings.system?.autoStart,settings.system?.startMinimized,settings.system?.closeBehavior]);
+  useEffect(()=>{setSystemDraft(settings.system||{autoStart:false,startMinimized:false,closeBehavior:"quit"});},[settings.system?.autoStart,settings.system?.startMinimized,settings.system?.closeBehavior,settings.system?.closeBehaviorConfirmed]);
   useEffect(()=>{if(settingsTab!=="system"||!desktop())return;let active=true;void call<SystemStatus>("GetSystemStatus").then(status=>{if(active){setSystemStatus(status);setSystemDraft(status.settings);setSystemError("");}}).catch(error=>{if(active)setSystemError(String(error));});return()=>{active=false};},[settingsTab,settings.system?.autoStart]);
   useEffect(
     () => setDraft(settings),
@@ -1542,11 +1556,11 @@ function SettingsPanel({
       <section className="panel settings-panel" role="tabpanel" id="settings-pane-system" aria-labelledby="settings-tab-system" hidden={settingsTab!=="system"}>
         <div className="settings-title"><Monitor size={20}/><div><h2>系统设置</h2><p>设置面板的启动与关闭方式。</p></div></div>
         <div className="system-preference-row"><div><strong>开机自动启动</strong><p>当前用户登录 Windows 后自动打开 PHPanel，系统服务的开机启动由各实例独立设置。</p></div><label className="checkbox-field"><input aria-label="开机自动启动" type="checkbox" disabled={disabled||!systemStatus} checked={systemDraft.autoStart} onChange={event=>setSystemDraft({...systemDraft,autoStart:event.target.checked})}/>启用</label></div>
-        <div className="system-preference-row"><div><strong>启动时自动最小化</strong><p>下次启动面板时最小化到任务栏；管理员授权重启时会显示窗口。</p></div><label className="checkbox-field"><input aria-label="启动时自动最小化" type="checkbox" disabled={disabled} checked={systemDraft.startMinimized} onChange={event=>setSystemDraft({...systemDraft,startMinimized:event.target.checked})}/>启用</label></div>
-        <div className="system-preference-row"><div><strong>关闭按钮行为</strong><p>最小化到托盘时，面板与实例继续运行。托盘菜单可重新打开或退出程序。</p></div><select aria-label="关闭按钮行为" disabled={disabled} value={systemDraft.closeBehavior} onChange={event=>setSystemDraft({...systemDraft,closeBehavior:event.target.value as "quit"|"tray"})}><option value="quit">关闭程序</option><option value="tray" disabled={systemStatus?.trayAvailable===false}>最小化到托盘</option></select></div>
-        {systemStatus?.warning&&<p className="field-note">{systemStatus.warning}。托盘不可用时，关闭按钮会直接退出程序。</p>}
+        <div className="system-preference-row"><div><strong>静默启动</strong><p>下次启动后自动隐藏到托盘，点击托盘图标可打开面板；管理员授权重启时会显示窗口。</p></div><label className="checkbox-field"><input aria-label="静默启动" type="checkbox" disabled={disabled||(systemStatus?.trayAvailable===false&&!systemDraft.startMinimized)} checked={systemDraft.startMinimized} onChange={event=>setSystemDraft({...systemDraft,startMinimized:event.target.checked})}/>启用</label></div>
+        <div className="system-preference-row"><div><strong>关闭按钮行为</strong><p>首次关闭时选择并记住关闭方式，也可在这里修改。最小化到托盘后，面板与实例继续运行。</p></div><select aria-label="关闭按钮行为" disabled={disabled} value={systemDraft.closeBehaviorConfirmed?systemDraft.closeBehavior:"ask"} onChange={event=>setSystemDraft({...systemDraft,closeBehavior:event.target.value==="ask"?systemDraft.closeBehavior:event.target.value as "quit"|"tray",closeBehaviorConfirmed:event.target.value!=="ask"})}><option value="ask">首次关闭时询问</option><option value="quit">退出程序</option><option value="tray" disabled={systemStatus?.trayAvailable===false}>最小化到托盘</option></select></div>
+        {systemStatus?.warning&&<p className="field-note">{systemStatus.warning}。当前无法隐藏到托盘，请使用退出程序行为。</p>}
         {systemError&&<p className="inline-error" role="alert">{systemError}</p>}
-        <div className="system-preference-actions"><button className="button primary" disabled={disabled||!systemStatus||!!systemError} onClick={()=>saveSystem(systemDraft)}><Check size={16}/>保存系统设置</button></div>
+        <div className="settings-actions"><button className="button primary" disabled={disabled||!systemStatus||!!systemError} onClick={()=>saveSystem(systemDraft)}><Check size={16}/>保存系统设置</button></div>
       </section>
       <section
         className="panel settings-panel"
@@ -1643,14 +1657,14 @@ function SettingsPanel({
           {catalog.lastSuccess &&
             ` 最近成功更新：${new Date(catalog.lastSuccess).toLocaleString("zh-CN")}`}
         </p>
-        <button
+        <div className="settings-actions"><button
           className="button primary"
           disabled={disabled}
           onClick={() => save({ ...draft, themeMode })}
         >
           <Check size={16} />
           保存设置
-        </button>
+        </button></div>
       </section>
       <section
         className="panel settings-panel"

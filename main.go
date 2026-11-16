@@ -48,6 +48,7 @@ func main() {
 		root = resume.DataRoot
 	}
 	desktopSettings := readDesktopPreferences(root)
+	app.startHidden = desktopStartHidden(desktopSettings, resume != nil)
 	webviewProfile := resolveWebviewProfile(exe, root, os.Getenv("PHPANEL_WEBVIEW_PROFILE_DIR"))
 	err = wails.Run(&options.App{
 		Title: "PHPanel · 本地开发环境", Width: 1280, Height: 840,
@@ -55,7 +56,8 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 246, G: 247, B: 245, A: 255},
 		AssetServer:      &assetserver.Options{Assets: assets},
 		OnStartup:        app.startup, OnShutdown: app.shutdown, OnBeforeClose: app.beforeClose,
-		WindowStartState:   desktopStartState(desktopSettings, resume != nil),
+		OnDomReady:         app.finishDesktopStartup,
+		StartHidden:        app.startHidden,
 		SingleInstanceLock: &options.SingleInstanceLock{UniqueId: desktopInstanceID(root), OnSecondInstanceLaunch: func(options.SecondInstanceData) { app.desktop.restore() }},
 		Bind:               []interface{}{app},
 		Windows:            &windows.Options{WebviewGpuIsDisabled: os.Getenv("PHPANEL_SOFTWARE_RENDERING") != "0", WebviewUserDataPath: webviewProfile},

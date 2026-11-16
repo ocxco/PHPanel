@@ -38,7 +38,11 @@
 .system-preference-row p {font-size:12px;color:var(--muted);line-height:1.8;margin:6px 0 0;}
 .system-preference-row .checkbox-field {margin:0;white-space:nowrap;}
 .system-preference-row > select {min-width:160px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);height:36px;padding:0 10px;font:inherit;font-size:12px;}
-.system-preference-actions {margin-top:23px;}
+.settings-actions {display:flex;justify-content:flex-end;gap:10px;margin-top:23px;}
+.close-prompt-dialog {border:0;padding:0;background:transparent;color:var(--text);max-width:calc(100vw - 40px);}
+.close-prompt-dialog::backdrop {background:rgba(0,0,0,.4);}
+.close-prompt-dialog .modal {max-width:100%;box-sizing:border-box;}
+.close-prompt-dialog .modal-actions {flex-wrap:wrap;}
 .toolchain-php > small {color:var(--muted);font-size:12px;line-height:1.6;}
 .toolchain-composer {border-left:1px solid var(--border);padding-left:22px;}
 .toolchain-composer > div:first-child {display:flex;gap:12px;font-size:13px;}

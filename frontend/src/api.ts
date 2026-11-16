@@ -79,7 +79,7 @@ export type Settings = {
   catalogUpdateHours: number;
   catalogUrls: string[];
 };
-export type SystemSettings={autoStart:boolean;startMinimized:boolean;closeBehavior:"quit"|"tray"};
+export type SystemSettings={autoStart:boolean;startMinimized:boolean;closeBehavior:"quit"|"tray";closeBehaviorConfirmed?:boolean};
 export type SystemStatus={settings:SystemSettings;trayAvailable:boolean;warning:string};
 export type CatalogStatus = {
   refreshing: boolean;
