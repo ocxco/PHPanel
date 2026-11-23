@@ -22,6 +22,17 @@ export type Package = {
   path: string;
   executable: string;
   installedAt: string;
+  directoryName?: string;
+  nginxAutoPHP?: boolean;
+  nginxStopPHP?: boolean;
+  linkedNginxId?: string;
+  linkedRun?: string;
+  serviceName?: string;
+  serviceAutoStart?: boolean;
+  port: number;
+  status: string;
+  pid: number;
+  error: string;
 };
 export type Instance = {
   nginxAutoPHP?: boolean;
@@ -89,7 +100,7 @@ export type CatalogStatus = {
   warnings: string[];
 };
 export type State = {
-	 tools: {phpInstanceId: string; composerVersion: string; composerSha256: string};
+	 tools: {phpPackageId?: string; phpInstanceId: string; composerVersion: string; composerSha256: string};
 	 extensionPackages: InstalledPHPExtension[];
 	 preparedExtensions: {taskId: string; record: InstalledPHPExtension}[];
   revision: number;
@@ -139,7 +150,7 @@ export async function call<T = void>(
   }
 }
 export const emptyState: State = {
-	 tools: {phpInstanceId:"",composerVersion:"",composerSha256:""},
+	 tools: {phpPackageId:"",phpInstanceId:"",composerVersion:"",composerSha256:""},
 	 extensionPackages: [],
 	 preparedExtensions: [],
   revision: 0,
@@ -213,4 +224,4 @@ export type PHPOnlineExtensions = {
   version: string; build: string; zendBuild: string; items: PHPExtensionArtifact[];
   updatedAt: string; warnings: string[];
 };
-export type CLIStatus = {phpInstanceId:string;phpVersion:string;composerVersion:string;composerInstalled:boolean;userPathEnabled:boolean;phpPathEnabled:boolean;composerPathEnabled:boolean;directory:string;warning:string};
+export type CLIStatus = {phpPackageId?:string;phpInstanceId:string;phpVersion:string;composerVersion:string;composerInstalled:boolean;userPathEnabled:boolean;phpPathEnabled:boolean;composerPathEnabled:boolean;directory:string;warning:string};

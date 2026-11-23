@@ -163,8 +163,8 @@ func TestSharedEditorAndOnlyValidationSelectionChangeKeepsCustomContent(t *testi
 	if err != nil {
 		t.Fatal("PHP config path regressed:", err)
 	}
-	if phpConfig.Path != filepath.Join(p.Path, "config", "php.ini") {
-		t.Fatal("PHP config moved out of instance")
+	if phpConfig.Path != filepath.Join(p.Path, "php.ini") {
+		t.Fatal("PHP config path regressed")
 	}
 	if _, err := m.SaveConfig(p.ID, "php.ini", phpConfig.Content+"\n; user setting\n", phpConfig.Revision); err != nil {
 		t.Fatal(err)
@@ -174,10 +174,19 @@ func TestPHPStartRulesRemainPerPackageAndNginxStartBlocksConfigChanges(t *testin
 	m, a, _, p, q := siteFixture(t)
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// A PHP package that is starting blocks another start of the same package
+	// (per-package singleton enforced via the per-package start key).
+	m.operations[instanceStartKey(p)] = true
+	defer delete(m.operations, instanceStartKey(p))
+	if err := m.canStartLocked(p); err == nil || !strings.Contains(err.Error(), "已安装版本") {
+		t.Fatal("same PHP package start not blocked")
+	}
+	// A running PHP package does not block a different PHP package: each
+	// package is its own runtime and multiple versions may run concurrently.
 	m.processes[p.ID] = &managedProcess{}
 	defer delete(m.processes, p.ID)
-	if err := m.canStartLocked(q); err == nil || !strings.Contains(err.Error(), "已安装版本") {
-		t.Fatal("PHP package singleton lost")
+	if err := m.canStartLocked(q); err != nil {
+		t.Fatal("different PHP package blocked:", err)
 	}
 	other := q
 	other.PackageID = "different-php-version"

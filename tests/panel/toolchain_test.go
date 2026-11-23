@@ -58,11 +58,15 @@ func TestCLISelectionDoesNotModifySystemPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(invocation.Args, []string{"-c", nativePath(filepath.Join(q.Path, "config", "php.ini")), "-r", "echo 123;"}) {
+	if !reflect.DeepEqual(invocation.Args, []string{"-c", nativePath(filepath.Join(q.Path, "php.ini")), "-r", "echo 123;"}) {
 		t.Fatal(invocation.Args)
 	}
-	if !strings.Contains(strings.Join(invocation.Env, "\n"), "PHP_INI_SCAN_DIR=") {
+	env := strings.Join(invocation.Env, "\n")
+	if !strings.Contains(env, "PHP_INI_SCAN_DIR=") {
 		t.Fatal("scan dir missing")
+	}
+	if !strings.Contains(env, "PHPRC="+nativePath(filepath.Join(q.Path, "php.ini"))) {
+		t.Fatal("inheritable PHPRC missing")
 	}
 }
 func TestComposerDirectoryChoosesSupportedStable(t *testing.T) {
@@ -196,7 +200,7 @@ func TestDisablePHPPathKeepsComposerAndEnablingComposerDoesNotRestorePHP(t *test
 	if err != nil {
 		t.Fatal("Composer lost its PHP configuration", err)
 	}
-	if invocation.Args[1] != nativePath(filepath.Join(p.Path, "config", "php.ini")) {
+	if invocation.Args[1] != nativePath(filepath.Join(p.Path, "php.ini")) {
 		t.Fatal(invocation.Args)
 	}
 	status, err = m.EnableComposerPath()

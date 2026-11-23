@@ -16,6 +16,16 @@ func findSiteInstance(state State, key, component string) (Instance, error) {
 			return i, nil
 		}
 	}
+	// PHP packages are their own runtime: synthesize an Instance view from the
+	// matching package so website/nginx resolution keeps working without a
+	// separate PHP instance row.
+	if component == "php" {
+		for _, p := range state.Packages {
+			if p.ID == key && p.Component == "php" {
+				return instanceFromPackage(p), nil
+			}
+		}
+	}
 	return Instance{}, fmt.Errorf("请选择有效的 %s 实例", component)
 }
 func prepareSite(state State, site Site) (Site, error) {
@@ -58,6 +68,11 @@ func prepareSite(state State, site Site) (Site, error) {
 	for _, instance := range state.Instances {
 		if instance.Component != "nginx" && instance.Port == site.Port {
 			return Site{}, fmt.Errorf("端口已被实例 %s 使用", instance.Name)
+		}
+	}
+	for _, p := range state.Packages {
+		if p.Component == "php" && p.Port == site.Port {
+			return Site{}, fmt.Errorf("端口已被 PHP %s 使用", p.Version)
 		}
 	}
 	for _, old := range state.Sites {

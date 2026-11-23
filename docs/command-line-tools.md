@@ -6,7 +6,7 @@
 
 软件生成 `cli/php.exe` 与 `cli/composer.exe`，把 `cli` 目录放到当前用户 PATH 的前端，并去重本目录已有条目。其它软件的路径及系统 PATH 保留。修改后会通知 Windows 环境变量变化，但已打开终端通常需要重新打开。
 
-PHP 切换更新的是面板中保存的实例 ID；两个命令入口每次执行时读取该选择，因此无需反复修改 PATH。命令使用对应 PHP 包的 `php.exe`，通过 `-c` 指定实例 `php.ini`，通过进程专属 `PHP_INI_SCAN_DIR` 指定实例 `conf.d`，并保留终端当前工作目录、参数、输入输出及退出码。
+PHP 切换更新的是面板中保存的实例 ID；两个命令入口每次执行时读取该选择，因此无需反复修改 PATH。命令使用对应 PHP 包的 `php.exe`，通过 `-c` 指定实例 `php.ini`，同时以 `PHPRC` 传递同一份 `php.ini`、以进程专属 `PHP_INI_SCAN_DIR` 指定实例 `conf.d`，并保留终端当前工作目录、参数、输入输出及退出码。`PHPRC` 与 `PHP_INI_SCAN_DIR` 会被 PHP 派生的子进程（如 `queue:work`、`artisan serve` 的 `-S` 服务器、`proc_open`）继承，使这些子进程在缺少 `-c` 时仍加载实例主配置，而不是回落到编译期默认的 `C:\php\ext`。
 
 选择版本后点击“设置环境变量”即可添加或切换；选中的版本已经生效时，该按钮置灰。“取消环境变量”移除 PHPanel 生成的全局 PHP 命令入口，但保留已选的 PHP 配置，供 Composer 继续使用。如果 Composer 命令已可用，保留其 PATH 与入口；否则移除本软件的 CLI 目录 PATH 项。其它 PHP 安装、PATH 条目、PHP 服务和扩展不随取消操作修改。取消后可以重新设置。
 

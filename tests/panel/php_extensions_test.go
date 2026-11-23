@@ -68,19 +68,16 @@ func TestPHPSelectionRestrictions(t *testing.T) {
 func TestPHPINIRevisionAndEditorFiles(t *testing.T) {
 	root := t.TempDir()
 	i := Instance{Path: root, Component: "php"}
-	if err := os.MkdirAll(filepath.Join(root, "config", "conf.d"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	main := filepath.Join(root, "config", "php.ini")
-	scan := filepath.Join(root, "config", "conf.d", "99-user.ini")
-	if err := os.WriteFile(main, []byte("[PHP]\n"), 0600); err != nil {
+	main := filepath.Join(root, "php.ini")
+	body := "; user preamble outside the managed block\n" + phpManagedBegin + "\n[PHP]\nextension=\"php_curl.dll\"\n" + phpManagedEnd + "\n"
+	if err := os.WriteFile(main, []byte(body), 0600); err != nil {
 		t.Fatal(err)
 	}
 	a, err := readPHPINI(i)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(scan, []byte("extension=curl\n"), 0600); err != nil {
+	if err := os.WriteFile(main, []byte(strings.Replace(body, "php_curl.dll", "php_mbstring.dll", 1)), 0600); err != nil {
 		t.Fatal(err)
 	}
 	b, err := readPHPINI(i)
@@ -88,10 +85,10 @@ func TestPHPINIRevisionAndEditorFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	if a.revision == b.revision {
-		t.Fatal("scan file omitted from revision")
+		t.Fatal("managed block change omitted from revision")
 	}
 	names := configNames(State{}, i)
-	if len(names) != 2 || names[1] != "conf.d/99-user.ini" {
+	if len(names) != 1 || names[0] != "php.ini" {
 		t.Fatal(names)
 	}
 }

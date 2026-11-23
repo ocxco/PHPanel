@@ -130,6 +130,9 @@ func (m *Manager) reloadSiteConfig(change siteConfigChange) error {
 		return m.nginxReloader(change.instance, change.pkg)
 	}
 	i := change.instance
+	if i.ServiceName != "" && !m.serviceHost {
+		return m.backendLocked().ReloadNginx(i)
+	}
 	return runLogged(change.pkg.Executable, []string{"-p", normalized(i.Path) + "/", "-c", normalized(change.path), "-s", "reload"}, i.Path, filepath.Join(i.Path, "logs", "site-reload.log"), 10*time.Second)
 }
 func (m *Manager) applySiteChanges(before State, sites []Site, affected []string) error {

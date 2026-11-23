@@ -81,6 +81,13 @@ func (m *Manager) phpBackend() phpRuntimeBackend {
 
 func (m *Manager) syncRemotePHP(i Instance, status phpRuntimeStatus) error {
 	return m.change(func(s *State) error {
+		for n := range s.Packages {
+			if s.Packages[n].ID == i.ID && s.Packages[n].Component == "php" {
+				s.Packages[n].Status, s.Packages[n].PID, s.Packages[n].Error = status.Status, status.PID, status.Error
+				s.Packages[n].LinkedNginxID, s.Packages[n].LinkedRun = status.Owner, status.Run
+				return nil
+			}
+		}
 		for n := range s.Instances {
 			if s.Instances[n].ID == i.ID {
 				s.Instances[n].Status, s.Instances[n].PID, s.Instances[n].Error = status.Status, status.PID, status.Error
@@ -88,15 +95,16 @@ func (m *Manager) syncRemotePHP(i Instance, status phpRuntimeStatus) error {
 				return nil
 			}
 		}
-		return fmt.Errorf("PHP 实例不存在")
+		return fmt.Errorf("PHP 运行时不存在")
 	})
 }
 
 func (m *Manager) refreshRemotePHP() {
-	for _, i := range m.Snapshot().Instances {
-		if i.Component != "php" {
+	for _, p := range m.Snapshot().Packages {
+		if p.Component != "php" {
 			continue
 		}
+		i := instanceFromPackage(p)
 		m.mu.Lock()
 		owned, changing := m.processes[i.ID] != nil, m.operations[i.ID] || m.operations["php-restart:"+i.ID]
 		m.mu.Unlock()

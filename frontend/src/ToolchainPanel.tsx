@@ -4,11 +4,11 @@ import { call, type CLIStatus, type State } from "./api";
 
 export default function ToolchainPanel({ state, disabled, changed }: { state: State; disabled: boolean; changed: () => Promise<void> }) {
   const [status, setStatus] = useState<CLIStatus>();
-  const [php, setPHP] = useState(state.tools.phpInstanceId || state.instances.find(i => i.component === "php")?.id || "");
+  const [php, setPHP] = useState(state.tools.phpPackageId || state.tools.phpInstanceId || state.packages.find(p => p.component === "php")?.id || "");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const phpInstances = state.instances.filter(i => i.component === "php");
+  const phpPackages = state.packages.filter(p => p.component === "php");
 
   async function refresh() {
     try { setStatus(await call<CLIStatus>("GetCLIStatus")); }
@@ -16,10 +16,10 @@ export default function ToolchainPanel({ state, disabled, changed }: { state: St
   }
   useEffect(() => {
     void refresh();
-    if (!state.instances.some(i => i.id === php && i.component === "php")) {
-      setPHP(state.tools.phpInstanceId || state.instances.find(i => i.component === "php")?.id || "");
+    if (!state.packages.some(p => p.id === php && p.component === "php")) {
+      setPHP(state.tools.phpPackageId || state.tools.phpInstanceId || state.packages.find(p => p.component === "php")?.id || "");
     }
-  }, [state.tools.phpInstanceId, state.tools.composerVersion, state.instances.length]);
+  }, [state.tools.phpPackageId, state.tools.phpInstanceId, state.tools.composerVersion, state.packages.length]);
 
   async function perform(kind: string) {
     setBusy(kind); setError(""); setMessage("");
@@ -45,7 +45,7 @@ export default function ToolchainPanel({ state, disabled, changed }: { state: St
 
   const task = state.tasks.slice().reverse().find(t => t.kind === "composer");
   const installing = !!task && ["downloading", "installing", "verifying"].includes(task.status);
-  const currentPHP = php === status?.phpInstanceId && status?.phpPathEnabled;
+  const currentPHP = php === (status?.phpPackageId || status?.phpInstanceId) && status?.phpPathEnabled;
   const canRemovePHP = !!status && (status.phpPathEnabled || (status.userPathEnabled && !status.composerPathEnabled));
   const locked = disabled || !!busy;
 
@@ -57,7 +57,7 @@ export default function ToolchainPanel({ state, disabled, changed }: { state: St
         <div className="toolchain-controls">
           <select aria-label="PHP 版本" disabled={locked} value={php} onChange={e => setPHP(e.target.value)}>
             <option value="">选择 PHP 版本</option>
-            {phpInstances.map(i => <option key={i.id} value={i.id}>PHP {i.version}{phpInstances.filter(other => other.version === i.version).length > 1 ? ` · ${i.name}` : ""}</option>)}
+            {phpPackages.map(p => <option key={p.id} value={p.id}>PHP {p.version}{phpPackages.filter(other => other.version === p.version).length > 1 ? ` · ${p.id.slice(0, 8)}` : ""}</option>)}
           </select>
           <button className="button secondary compact" disabled={locked || !php || !status || !!currentPHP} onClick={() => void perform("php-path")}>
             {busy === "php-path" ? <LoaderCircle className="spin" size={14} /> : <Check size={14} />}设置环境变量
@@ -66,7 +66,7 @@ export default function ToolchainPanel({ state, disabled, changed }: { state: St
             {busy === "php-remove" ? <LoaderCircle className="spin" size={14} /> : <X size={14} />}取消环境变量
           </button>
         </div>
-        <small>{status?.phpPathEnabled ? status.phpVersion ? `当前：PHP ${status.phpVersion}` : "请选择有效的 PHP 实例" : "未设置 PHP 环境变量"}</small>
+        <small>{status?.phpPathEnabled ? status.phpVersion ? `当前：PHP ${status.phpVersion}` : "请选择有效的 PHP 版本" : "未设置 PHP 环境变量"}</small>
       </div>
       <div className="toolchain-composer">
         <div><strong>Composer</strong><span className="mono">{status?.composerInstalled ? status.composerVersion : "尚未安装"}</span></div>

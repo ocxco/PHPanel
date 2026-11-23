@@ -66,6 +66,33 @@ func writeFixture(t *testing.T, data []byte) string {
 	}
 	return path
 }
+
+// phpRuntimeFromPackage pins a PHP package's runtime port and returns the
+// Instance view synthesized from it. It replaces CreateInstance for PHP in test
+// fixtures: after the merge a PHP package IS its runtime, so there is no
+// separate instance row to create.
+func phpRuntimeFromPackage(t *testing.T, m *Manager, p InstalledPackage, port int) Instance {
+	t.Helper()
+	if port > 0 {
+		if err := m.change(func(s *State) error {
+			for n := range s.Packages {
+				if s.Packages[n].ID == p.ID {
+					s.Packages[n].Port = port
+					return nil
+				}
+			}
+			return fmt.Errorf("php 包 %s 不存在", p.ID)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	i, _, err := m.lookupInstance(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return i
+}
+
 func waitTask(t *testing.T, m *Manager, key string, status string) Task {
 	t.Helper()
 	deadline := time.Now().Add(8 * time.Second)
@@ -140,31 +167,30 @@ func TestArchiveRejectsInvalidExecutableAndChecksum(t *testing.T) {
 }
 func TestPackageInstancesAndRestartPreserveData(t *testing.T) {
 	m := testManager(t)
-	path := writeFixture(t, testZIP(t, map[string][]byte{"bundle/php-cgi.exe": fakePE()}))
+	path := writeFixture(t, testZIP(t, map[string][]byte{"bundle/php-cgi.exe": fakePE(), "version.txt": []byte("1.0")}))
 	p, err := m.ImportArchive("php", "1.0", path, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := m.CreateInstance(p.ID, "first", 18801)
-	if err != nil {
+	// Post-merge: each PHP package is the runtime. Pin a port, then ensure
+	// package data survives a manager restart.
+	i := phpRuntimeFromPackage(t, m, p, 18801)
+	dataPath := filepath.Join(i.Path, "data", "keep.txt")
+	if err := os.MkdirAll(filepath.Dir(dataPath), 0700); err != nil {
 		t.Fatal(err)
 	}
-	second, err := m.CreateInstance(p.ID, "second", 18802)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.Path == second.Path {
-		t.Fatal("instance directories overlap")
-	}
-	dataPath := filepath.Join(first.Path, "data", "keep.txt")
 	if err := os.WriteFile(dataPath, []byte("keep"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.RemovePackage(p.ID); err == nil {
-		t.Fatal("referenced package removed")
+	// A second PHP package is an independent runtime with its own directory.
+	otherPath := writeFixture(t, testZIP(t, map[string][]byte{"bundle/php-cgi.exe": fakePE(), "version.txt": []byte("2.0")}))
+	q, err := m.ImportArchive("php", "2.0", otherPath, "")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := m.CreateInstance(p.ID, "same-port", 18801); err == nil {
-		t.Fatal("duplicate instance port accepted")
+	qi := phpRuntimeFromPackage(t, m, q, 18802)
+	if i.Path == qi.Path {
+		t.Fatal("PHP package runtime directories overlap")
 	}
 	m.Close()
 	again, err := New(m.root)
@@ -172,8 +198,8 @@ func TestPackageInstancesAndRestartPreserveData(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer again.Close()
-	if len(again.Snapshot().Instances) != 2 {
-		t.Fatal("metadata did not survive restart")
+	if len(again.Snapshot().Packages) != 2 {
+		t.Fatal("packages did not survive restart")
 	}
 	b, err := os.ReadFile(dataPath)
 	if err != nil || string(b) != "keep" {

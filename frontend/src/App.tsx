@@ -138,6 +138,29 @@ function instanceLabel(i: Instance) {
   const version = i.version;
   return i.name.includes(version) ? i.name : `${i.name} · ${version}`;
 }
+// Merged PHP: a PHP package IS the runtime. View a package as an Instance so
+// existing runtime handlers (start/stop, config, extensions, logs) and modals
+// can consume it; the Go side resolves the package id via lookupInstance.
+function phpPackageAsInstance(p: Package): Instance {
+  return {
+    id: p.id,
+    packageId: p.id,
+    name: `PHP ${p.version}`,
+    component: "php",
+    version: p.version,
+    port: p.port,
+    path: p.path,
+    status: p.status,
+    pid: p.pid,
+    error: p.error,
+    linkedNginxId: p.linkedNginxId,
+    linkedRun: p.linkedRun,
+    serviceName: p.serviceName,
+    serviceAutoStart: p.serviceAutoStart,
+    nginxAutoPHP: p.nginxAutoPHP,
+    nginxStopPHP: p.nginxStopPHP,
+  };
+}
 function ComponentMark({
   type,
   small = false,
@@ -281,7 +304,9 @@ export default function App() {
       setBusy("");
     }
   }
-  const running = state.instances.filter((i) => i.status === "running").length,
+  const running =
+      state.instances.filter((i) => i.status === "running").length +
+      state.packages.filter((p) => p.component === "php" && p.status === "running").length,
     activeDownloads = state.tasks.filter((t) =>
       ["downloading", "installing", "verifying"].includes(t.status),
     ).length;
@@ -314,6 +339,10 @@ export default function App() {
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
+  const phpRuntimes = state.packages.filter((p) => p.component === "php");
+  const serviceInstances = state.instances.filter(
+    (i) => i.component !== "php",
+  );
   const currentNav = nav.find((n) => n.id === view)!;
   const pageCount = Math.max(1, Math.ceil(artifacts.length / 30));
   function install(a: Artifact) {
@@ -327,6 +356,19 @@ export default function App() {
     );
   }
   function instanceButton(pkg: Package) {
+    if (pkg.component === "php") {
+      return (
+        <button
+          className="button compact secondary"
+          onClick={() => {
+            setView("environments");
+            setTab("installed");
+          }}
+        >
+          <Play size={14} /> 管理运行时
+        </button>
+      );
+    }
     const hasInstance = state.instances.some((i) => i.packageId === pkg.id);
     return (
       <button
@@ -540,7 +582,9 @@ export default function App() {
                         className={
                           state.instances.some(
                             (i) => i.component === c && i.status === "running",
-                          )
+                          ) ||
+                          (c === "php" &&
+                            phpRuntimes.some((p) => p.status === "running"))
                             ? "running-note"
                             : "quiet-note"
                         }
@@ -549,7 +593,11 @@ export default function App() {
                         {
                           state.instances.filter(
                             (i) => i.component === c && i.status === "running",
-                          ).length
+                          ).length +
+                            (c === "php"
+                              ? phpRuntimes.filter((p) => p.status === "running")
+                                  .length
+                              : 0)
                         }{" "}
                         运行中
                       </span>
@@ -744,42 +792,133 @@ export default function App() {
                   </>
                 ) : (
                   <>
-                    {packages.map((p) => (
-                      <div className="package-row" key={p.id}>
-                        <ComponentMark type={p.component} />
-                        <div className="package-details">
-                          <strong>
-                            {label[p.component]}{" "}
-                            <span className="mono">{p.version}</span>
-                          </strong>
-                          <span className="package-path">{p.path}</span>
+                    {packages.map((p) =>
+                      p.component === "php" ? (
+                        <div className="package-row runtime" key={p.id}>
+                          <ComponentMark type="php" />
+                          <div className="package-details">
+                            <strong>
+                              PHP <span className="mono">{p.version}</span>
+                            </strong>
+                            <span className="package-path">{p.path}</span>
+                          </div>
+                          <Badge status={p.status || "stopped"} />
+                          <span className="mono small">
+                            {p.port ? `127.0.0.1:${p.port}` : "未分配端口"}
+                            {p.pid ? ` · PID ${p.pid}` : ""}
+                          </span>
+                          <button
+                            className="button compact"
+                            disabled={!!busy}
+                            onClick={() =>
+                              void action(
+                                `php-power-${p.id}`,
+                                () =>
+                                  p.status === "running"
+                                    ? call("StopInstance", p.id)
+                                    : call("StartInstance", p.id),
+                                p.status === "running" ? "已停止" : "PHP 已启动",
+                              )
+                            }
+                          >
+                            {p.status === "running" ? (
+                              <Square size={14} />
+                            ) : (
+                              <Play size={14} />
+                            )}
+                            {p.status === "running" ? "停止" : "启动"}
+                          </button>
+                          <button
+                            className="subtle-button"
+                            disabled={!!busy}
+                            onClick={() =>
+                              void action(`php-log-${p.id}`, () =>
+                                call("OpenLocation", "logs", p.id),
+                              )
+                            }
+                          >
+                            <Terminal size={15} /> 日志
+                          </button>
+                          <button
+                            className="subtle-button"
+                            disabled={!!busy}
+                            onClick={() =>
+                              setModal({
+                                kind: "php-extensions",
+                                instance: phpPackageAsInstance(p),
+                              })
+                            }
+                          >
+                            <Pencil size={15} /> 扩展
+                          </button>
+                          <button
+                            className="subtle-button"
+                            disabled={!!busy}
+                            onClick={() =>
+                              setModal({
+                                kind: "config",
+                                instance: phpPackageAsInstance(p),
+                              })
+                            }
+                          >
+                            <Pencil size={15} /> 配置
+                          </button>
+                          <button
+                            className="subtle-button"
+                            disabled={!!busy}
+                            onClick={() =>
+                              void action(`php-dir-${p.id}`, () =>
+                                call("OpenLocation", "package", p.id),
+                              )
+                            }
+                          >
+                            <FolderOpen size={15} /> 目录
+                          </button>
+                          <button
+                            className="icon-button danger"
+                            aria-label={`卸载 PHP ${p.version}`}
+                            onClick={() => setModal({ kind: "remove", pkg: p })}
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
-                        <span className="verified">
-                          <ShieldCheck size={14} />
-                          {p.verification}
-                        </span>
-                        <button
-                          className="subtle-button"
-                          disabled={!!busy}
-                          onClick={() =>
-                            void action(`package-dir-${p.id}`, () =>
-                              call("OpenLocation", "package", p.id),
-                            )
-                          }
-                        >
-                          <FolderOpen size={15} />
-                          目录
-                        </button>
-                        {instanceButton(p)}
-                        <button
-                          className="icon-button danger"
-                          aria-label={`卸载 ${label[p.component]} ${p.version}`}
-                          onClick={() => setModal({ kind: "remove", pkg: p })}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))}
+                      ) : (
+                        <div className="package-row" key={p.id}>
+                          <ComponentMark type={p.component} />
+                          <div className="package-details">
+                            <strong>
+                              {label[p.component]}{" "}
+                              <span className="mono">{p.version}</span>
+                            </strong>
+                            <span className="package-path">{p.path}</span>
+                          </div>
+                          <span className="verified">
+                            <ShieldCheck size={14} />
+                            {p.verification}
+                          </span>
+                          <button
+                            className="subtle-button"
+                            disabled={!!busy}
+                            onClick={() =>
+                              void action(`package-dir-${p.id}`, () =>
+                                call("OpenLocation", "package", p.id),
+                              )
+                            }
+                          >
+                            <FolderOpen size={15} />
+                            目录
+                          </button>
+                          {instanceButton(p)}
+                          <button
+                            className="icon-button danger"
+                            aria-label={`卸载 ${label[p.component]} ${p.version}`}
+                            onClick={() => setModal({ kind: "remove", pkg: p })}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ),
+                    )}
                     {packages.length === 0 && (
                       <Empty
                         icon={<PackagePlus size={25} />}
@@ -850,14 +989,14 @@ export default function App() {
             <section className="panel">
               <div className="section-label">
                 <h2>
-                  服务实例 <span>{state.instances.length}</span>
+                  服务实例 <span>{serviceInstances.length}</span>
                 </h2>
                 <span className="running-note">
                   <i />
                   {running} 个正在运行
                 </span>
               </div>
-              {state.instances.length === 0 ? (
+              {serviceInstances.length === 0 ? (
                 <Empty
                   icon={<Layers3 size={26} />}
                   title="还没有服务实例"
@@ -877,7 +1016,7 @@ export default function App() {
                 />
               ) : (
                 components.map((component) => {
-                  const group = state.instances
+                  const group = serviceInstances
                     .filter((i) => i.component === component)
                     .sort((a, b) =>
                       b.version.localeCompare(a.version, undefined, {
@@ -1131,6 +1270,8 @@ export default function App() {
                             {" "}
                             · PHP{" "}
                             {
+                              state.packages.find((p) => p.id === s.phpId)
+                                ?.version ||
                               state.instances.find((i) => i.id === s.phpId)
                                 ?.version
                             }
@@ -1284,7 +1425,7 @@ export default function App() {
                         </button>
                       ) : t.status === "awaiting_restart" ? (
                         <button className="button compact secondary" disabled={!!busy}
-                          onClick={() => { const i = state.instances.find(i => i.id === t.instanceId); if (i) setModal({kind:"php-extensions",instance:i}); }}>
+                          onClick={() => { const i = state.instances.find(x => x.id === t.instanceId); const pkg = state.packages.find(p => p.id === t.instanceId); const target = i || (pkg ? phpPackageAsInstance(pkg) : undefined); if (target) setModal({kind:"php-extensions",instance:target}); }}>
                           管理并应用
                         </button>
                       ) : t.status === "completed" ? (
@@ -1764,6 +1905,7 @@ function ModalView({
   close: () => void;
   submit: (key: string, work: () => Promise<unknown>, success?: string) => void;
 }) {
+  const phpRuntimes = state.packages.filter((p) => p.component === "php");
   const [component, setComponent] = useState<Component>("php"),
     [version, setVersion] = useState(""),
     [hash, setHash] = useState(""),
@@ -1807,7 +1949,10 @@ function ModalView({
     [phpID, setPHPID] = useState(
       modal.kind === "site" && modal.site
         ? modal.site.phpId
-        : state.instances.find((i) => i.component === "php")?.id || "",
+        : state.tools.phpPackageId ||
+          state.tools.phpInstanceId ||
+          phpRuntimes[0]?.id ||
+          "",
     );
   const title =
     modal.kind === "edit-instance" ? "修改实例端口" : modal.kind === "import"
@@ -2143,14 +2288,13 @@ function ModalView({
                       value={phpID}
                       onChange={(e) => setPHPID(e.target.value)}
                     >
-                      <option value="">选择实例</option>
-                      {state.instances
-                        .filter((i) => i.component === "php")
-                        .map((i) => (
-                          <option key={i.id} value={i.id}>
-                            {instanceLabel(i)}
-                          </option>
-                        ))}
+                      <option value="">选择 PHP 版本</option>
+                      {phpRuntimes.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          PHP {p.version}
+                          {p.port ? ` · 127.0.0.1:${p.port}` : ""}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 </div>

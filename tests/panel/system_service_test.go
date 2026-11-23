@@ -10,9 +10,10 @@ import (
 )
 
 type fakeSystemServices struct {
-	services                         map[string]systemServiceStatus
-	failure                          error
-	starts, stops, installs, removes int
+	services                                  map[string]systemServiceStatus
+	failure                                   error
+	starts, stops, installs, removes, reloads int
+	reloadFailure                             error
 }
 
 func fakeServices() *fakeSystemServices {
@@ -66,6 +67,10 @@ func (f *fakeSystemServices) Stop(i Instance) error {
 	f.services[i.ID] = s
 	return nil
 }
+func (f *fakeSystemServices) ReloadNginx(i Instance) error {
+	f.reloads++
+	return f.reloadFailure
+}
 
 func serviceFixture(t *testing.T, component, version string) (*Manager, Instance, *fakeSystemServices) {
 	t.Helper()
@@ -80,6 +85,9 @@ func addServiceFixture(t *testing.T, m *Manager, component, version string, port
 	p, err := m.ImportArchive(component, version, writeFixture(t, testZIP(t, map[string][]byte{executableName(component): fakePE(), "version.txt": []byte(version)})), "")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if component == "php" {
+		return phpRuntimeFromPackage(t, m, p, port)
 	}
 	i, err := m.CreateInstance(p.ID, component+" "+version, port)
 	if err != nil {
@@ -259,8 +267,6 @@ func TestSCMNginxReloadsOnSiteChanges(t *testing.T) {
 		}
 	}
 	f.services[nginx.ID] = systemServiceStatus{Exists: true, Status: "running", PID: 999}
-	reloads := 0
-	m.nginxReloader = func(Instance, InstalledPackage) error { reloads++; return nil }
 	site := m.Snapshot().Sites
 	// siteFixture has no websites; create one with the normal validator fixture.
 	if len(site) == 0 {
@@ -270,8 +276,32 @@ func TestSCMNginxReloadsOnSiteChanges(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if reloads == 0 {
+	if f.reloads != 1 {
 		t.Fatal("SCM-owned Nginx did not reload")
+	}
+}
+
+func TestSCMNginxReloadFailureRestoresSiteAndConfig(t *testing.T) {
+	m, nginx, _, _, _ := siteFixture(t)
+	site, err := m.CreateSiteWithOptions("original", "", nginx.ID, "", 19690, "static")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(m.root, filepath.FromSlash(siteConfigName(site)))
+	before, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := fakeServices()
+	f.services[nginx.ID] = systemServiceStatus{Exists: true, Status: "running", PID: 999}
+	f.reloadFailure = fmt.Errorf("host reload failure")
+	m.systemServices = f
+	if _, err := m.UpdateSiteWithOptions(site.ID, "changed", site.Root, nginx.ID, "", site.Port, "static"); err == nil || !strings.Contains(err.Error(), "host reload failure") {
+		t.Fatal("reload failure was lost", err)
+	}
+	after, err := os.ReadFile(config)
+	if err != nil || !bytes.Equal(before, after) || m.Snapshot().Sites[0].Name != "original" || f.reloads != 2 {
+		t.Fatal("SCM reload failure did not restore original files and metadata", err, f.reloads)
 	}
 }
 

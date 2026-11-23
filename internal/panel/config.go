@@ -25,12 +25,8 @@ func configNames(state State, i Instance) []string {
 	name := map[string]string{"php": "php.ini", "nginx": "nginx.conf", "mysql": "my.ini", "redis": "redis.conf"}[i.Component]
 	names := []string{name}
 	if i.Component == "php" {
-		entries, _ := os.ReadDir(filepath.Join(i.Path, "config", "conf.d"))
-		for _, entry := range entries {
-			if !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), ".ini") {
-				names = append(names, "conf.d/"+entry.Name())
-			}
-		}
+		// PHP 配置是单一的 package/php.ini；不再使用 conf.d。
+		return names
 	}
 	if i.Component == "nginx" {
 		for _, site := range state.Sites {
@@ -50,6 +46,9 @@ func (m *Manager) configPath(i Instance, name string) (string, error) {
 		return "", fmt.Errorf("配置文件不在可编辑列表中")
 	}
 	dir := filepath.Join(i.Path, "config")
+	if i.Component == "php" {
+		dir = phpConfigDir(i)
+	}
 	path := filepath.Join(dir, filepath.FromSlash(name))
 	if i.Component == "nginx" {
 		path = m.nginxConfigPath(i, name)

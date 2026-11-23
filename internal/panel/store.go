@@ -171,6 +171,14 @@ func newManager(root, requestedSID string) (*Manager, error) {
 			}
 		}
 	}
+	// Merged PHP runtimes live on packages; reset their transient status too.
+	for i := range m.state.Packages {
+		if m.state.Packages[i].Component != "php" {
+			continue
+		}
+		m.state.Packages[i].Status = "stopped"
+		m.state.Packages[i].PID = 0
+	}
 	m.refreshSystemServices()
 	if err := m.migrateDirectoryNames(); err != nil {
 		return nil, fmt.Errorf("迁移版本目录失败: %w", err)
@@ -180,6 +188,10 @@ func newManager(root, requestedSID string) (*Manager, error) {
 	}
 	if err := m.migrateFlatExtensions(); err != nil {
 		return nil, fmt.Errorf("迁移扩展文件路径失败: %w", err)
+	}
+	stalePHPDirs, err := m.migratePHPCollapse()
+	if err != nil {
+		return nil, fmt.Errorf("迁移 PHP 实例到程序版本失败: %w", err)
 	}
 	if err := m.migrateSiteConfigs(m.Snapshot()); err != nil {
 		return nil, fmt.Errorf("迁移共享站点配置失败: %w", err)
@@ -196,6 +208,11 @@ func newManager(root, requestedSID string) (*Manager, error) {
 	}
 	if err := m.saveLocked(); err != nil {
 		return nil, err
+	}
+	// Only after the collapsed state is safely persisted do we remove the old
+	// PHP instance directories; a deletion failure leaves them in place.
+	for _, dir := range stalePHPDirs {
+		_ = os.RemoveAll(dir)
 	}
 	success = true
 	return m, nil
@@ -248,6 +265,12 @@ func cloneState(state State) State {
 		state.Artifacts[n].Sources = append([]Source{}, state.Artifacts[n].Sources...)
 	}
 	state.Packages = append([]InstalledPackage{}, state.Packages...)
+	for n := range state.Packages {
+		if state.Packages[n].NginxAutoPHP != nil {
+			enabled := *state.Packages[n].NginxAutoPHP
+			state.Packages[n].NginxAutoPHP = &enabled
+		}
+	}
 	state.Instances = append([]Instance{}, state.Instances...)
 	for n := range state.Instances {
 		if state.Instances[n].NginxAutoPHP != nil {

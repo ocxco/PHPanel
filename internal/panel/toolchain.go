@@ -12,7 +12,11 @@ import (
 type ToolchainSettings struct {
 	PHPPathDisabled bool   `json:"phpPathDisabled,omitempty"`
 	PHPEntrySHA256  string `json:"phpEntrySha256,omitempty"`
-	PHPInstanceID   string `json:"phpInstanceId"`
+	// PHPInstanceID is the legacy selector (instance id). Retained only to read
+	// pre-migration panel.json; migratePHPCollapse converts it to PHPPackageID.
+	PHPInstanceID string `json:"phpInstanceId,omitempty"`
+	// PHPPackageID is the merged selector: a PHP package id (package == runtime).
+	PHPPackageID    string `json:"phpPackageId,omitempty"`
 	ComposerVersion string `json:"composerVersion"`
 	ComposerSHA256  string `json:"composerSha256"`
 }
@@ -78,12 +82,25 @@ func (m *Manager) pathAccess() (func() (string, string, error), func(string) err
 	}
 	return reader, writer
 }
+
+// activePHPPackageID resolves the selected CLI PHP package id, preferring the
+// merged PHPPackageID selector and falling back to the legacy PHPInstanceID
+// (which holds a package id after migratePHPCollapse) so pre-migration data
+// and tests that write the legacy field keep working.
+func activePHPPackageID(state State) string {
+	if state.Tools.PHPPackageID != "" {
+		return state.Tools.PHPPackageID
+	}
+	return state.Tools.PHPInstanceID
+}
+
 func (m *Manager) GetCLIStatus() (CLIStatus, error) {
 	state := m.Snapshot()
-	status := CLIStatus{PHPInstanceID: state.Tools.PHPInstanceID, ComposerVersion: state.Tools.ComposerVersion, Directory: filepath.Join(m.root, "cli")}
-	for _, i := range state.Instances {
-		if i.ID == state.Tools.PHPInstanceID {
-			status.PHPVersion = i.Version
+	pkgID := activePHPPackageID(state)
+	status := CLIStatus{PHPInstanceID: pkgID, ComposerVersion: state.Tools.ComposerVersion, Directory: filepath.Join(m.root, "cli")}
+	for _, p := range state.Packages {
+		if p.ID == pkgID && p.Component == "php" {
+			status.PHPVersion = p.Version
 		}
 	}
 	if state.Tools.ComposerSHA256 != "" {
@@ -228,6 +245,7 @@ func (m *Manager) SelectCLIPHP(key string, enablePath bool) (CLIStatus, error) {
 	}
 	entryHash, _ := fileHash(filepath.Join(m.root, "cli", "php.exe"))
 	if err = m.change(func(s *State) error {
+		s.Tools.PHPPackageID = key
 		s.Tools.PHPInstanceID = key
 		if enablePath {
 			s.Tools.PHPPathDisabled = false
@@ -254,7 +272,8 @@ func (m *Manager) EnableComposerPath() (CLIStatus, error) {
 	m.siteMu.Lock()
 	defer m.siteMu.Unlock()
 	state := m.Snapshot()
-	if state.Tools.ComposerVersion == "" || state.Tools.PHPInstanceID == "" {
+	pkgID := activePHPPackageID(state)
+	if state.Tools.ComposerVersion == "" || pkgID == "" {
 		return CLIStatus{}, fmt.Errorf("请先安装 Composer 并选择命令行 PHP 实例")
 	}
 	status, err := m.GetCLIStatus()
@@ -264,7 +283,7 @@ func (m *Manager) EnableComposerPath() (CLIStatus, error) {
 	if !status.ComposerInstalled {
 		return status, fmt.Errorf("Composer 文件缺失或校验失败，请重新安装")
 	}
-	i, p, err := m.lookupInstance(state.Tools.PHPInstanceID)
+	i, p, err := m.lookupInstance(pkgID)
 	if err != nil || i.Component != "php" {
 		return status, fmt.Errorf("请重新选择 Composer 使用的 PHP 实例")
 	}
@@ -389,24 +408,20 @@ func ResolveCLIInvocation(root, command string, args []string) (CLIInvocation, e
 		return CLIInvocation{}, err
 	}
 	rebaseStatePaths(&state, state.Root, root)
-	var i Instance
+	pkgID := activePHPPackageID(state)
 	var p InstalledPackage
-	for _, item := range state.Instances {
-		if item.ID == state.Tools.PHPInstanceID && item.Component == "php" {
-			i = item
-		}
-	}
 	for _, item := range state.Packages {
-		if item.ID == i.PackageID && item.Component == "php" {
+		if item.ID == pkgID && item.Component == "php" {
 			p = item
 		}
 	}
-	if i.ID == "" || p.ID == "" {
+	if p.ID == "" {
 		return CLIInvocation{}, fmt.Errorf("请在 PHPanel 中选择命令行 PHP 实例")
 	}
+	i := instanceFromPackage(p)
 	executable := filepath.Join(filepath.Dir(p.Executable), "php.exe")
-	ini := filepath.Join(i.Path, "config", "php.ini")
-	scan := filepath.Join(i.Path, "config", "conf.d")
+	ini := phpINIPath(i)
+	scan := phpConfDPath(i)
 	if _, err = os.Stat(executable); err != nil {
 		return CLIInvocation{}, err
 	}
@@ -425,5 +440,5 @@ func ResolveCLIInvocation(root, command string, args []string) (CLIInvocation, e
 		return CLIInvocation{}, fmt.Errorf("未知命令入口")
 	}
 	argv = append(argv, args...)
-	return CLIInvocation{Executable: executable, Args: argv, Env: phpEnvironment(scan, phpLibraryDirs(ini, scan)...)}, nil
+	return CLIInvocation{Executable: executable, Args: argv, Env: phpEnvironment(ini, scan, phpLibraryDirs(ini, scan)...)}, nil
 }

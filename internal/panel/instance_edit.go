@@ -93,6 +93,11 @@ func (m *Manager) UpdateInstancePort(key string, port int) (Instance, error) {
 			return Instance{}, fmt.Errorf("端口已被实例 %s 使用", other.Name)
 		}
 	}
+	for _, p := range before.Packages {
+		if p.Component == "php" && p.ID != key && p.Port == port {
+			return Instance{}, fmt.Errorf("端口已被 PHP %s 使用", p.Version)
+		}
+	}
 	for _, site := range before.Sites {
 		if site.Port == port {
 			return Instance{}, fmt.Errorf("端口已被网站 %s 使用", site.Name)
@@ -169,6 +174,13 @@ func (m *Manager) UpdateInstancePort(key string, port int) (Instance, error) {
 		}
 	}
 	if err = m.change(func(s *State) error {
+		for n := range s.Packages {
+			if s.Packages[n].ID == key && s.Packages[n].Component == "php" {
+				s.Packages[n].Port = port
+				s.Packages[n].Error = ""
+				return nil
+			}
+		}
 		for n := range s.Instances {
 			if s.Instances[n].ID == key {
 				s.Instances[n].Port = port

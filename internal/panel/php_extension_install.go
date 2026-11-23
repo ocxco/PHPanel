@@ -550,24 +550,36 @@ func (m *Manager) validatePreparedExtension(item PreparedPHPExtension, i Instanc
 		return err
 	}
 	defer os.RemoveAll(check)
-	scan := filepath.Join(check, "conf.d")
-	if err = os.Mkdir(scan, 0700); err != nil {
-		return err
-	}
-	if err = os.WriteFile(filepath.Join(check, "php.ini"), main, 0600); err != nil {
-		return err
-	}
-	for name, body := range set.scan {
-		if name != phpManagedINI {
-			if err = os.WriteFile(filepath.Join(scan, name), body, 0600); err != nil {
-				return err
+	var probeIni, probeScan string
+	if i.Component == "php" {
+		final := insertManagedBlock(main, managed)
+		if err = os.WriteFile(filepath.Join(check, "php.ini"), final, 0600); err != nil {
+			return err
+		}
+		probeIni = filepath.Join(check, "php.ini")
+		probeScan = ""
+	} else {
+		scan := filepath.Join(check, "conf.d")
+		if err = os.Mkdir(scan, 0700); err != nil {
+			return err
+		}
+		if err = os.WriteFile(filepath.Join(check, "php.ini"), main, 0600); err != nil {
+			return err
+		}
+		for name, body := range set.scan {
+			if name != phpManagedINI {
+				if err = os.WriteFile(filepath.Join(scan, name), body, 0600); err != nil {
+					return err
+				}
 			}
 		}
+		if err = os.WriteFile(filepath.Join(scan, phpManagedINI), managed, 0600); err != nil {
+			return err
+		}
+		probeIni = filepath.Join(check, "php.ini")
+		probeScan = scan
 	}
-	if err = os.WriteFile(filepath.Join(scan, phpManagedINI), managed, 0600); err != nil {
-		return err
-	}
-	probe, warnings, err := probePHP(p, filepath.Join(check, "php.ini"), scan, i.Path)
+	probe, warnings, err := probePHP(p, probeIni, probeScan, i.Path)
 	if err != nil {
 		return err
 	}

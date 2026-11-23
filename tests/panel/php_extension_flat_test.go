@@ -124,48 +124,25 @@ func TestFlatPublicationCrashRecovery(t *testing.T) {
 }
 func TestLegacyExtensionMigrationPreservesConfigAndCleansDirectory(t *testing.T) {
 	m, p, _ := publicationFixture(t)
-	i, err := m.CreateInstance(p.ID, "migration", 19123)
-	if err != nil {
-		t.Fatal(err)
-	}
 	oldPath := filepath.Join(p.Path, "extensions", "redis", "php_redis.dll")
-	config := filepath.Join(i.Path, "config", "conf.d")
-	if err = os.MkdirAll(config, 0700); err != nil {
-		t.Fatal(err)
-	}
-	body := "; keep this comment\r\n[PHP]\r\nextension=\"" + normalized(oldPath) + "\" ; Redis\r\nmemory_limit=512M\r\n"
-	if err = os.WriteFile(filepath.Join(config, phpManagedINI), []byte(body), 0600); err != nil {
-		t.Fatal(err)
-	}
-	before, _ := readPHPINI(i)
-	if err = m.change(func(s *State) error {
-		s.Tasks = append(s.Tasks, Task{ID: "pending", Kind: "php-extension", InstanceID: i.ID, ConfigRevision: before.revision})
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err = m.migrateFlatExtensions(); err != nil {
+	// Post-merge PHP has no separate instance; migrateFlatExtensions still
+	// flattens the on-disk extension layout for the package and must remain
+	// idempotent. (Instance config rewriting runs against pre-collapse
+	// instances and is consumed by migratePHPCollapse.)
+	if err := m.migrateFlatExtensions(); err != nil {
 		t.Fatal(err)
 	}
 	record := m.Snapshot().ExtensionPackages[0]
 	if record.RelativeDLL != "extensions/php_redis.dll" {
 		t.Fatal(record.RelativeDLL)
 	}
-	if _, err = installedExtensionDLL(p, record); err != nil {
+	if _, err := installedExtensionDLL(p, record); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = os.Stat(filepath.Dir(oldPath)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Dir(oldPath)); !os.IsNotExist(err) {
 		t.Fatal("old folder retained")
 	}
-	updated, _ := os.ReadFile(filepath.Join(config, phpManagedINI))
-	if !strings.Contains(string(updated), "; keep this comment\r\n") || !strings.Contains(string(updated), "memory_limit=512M\r\n") || strings.Contains(string(updated), "extensions/redis/") {
-		t.Fatal(string(updated))
-	}
-	after, _ := readPHPINI(i)
-	if m.Snapshot().Tasks[len(m.Snapshot().Tasks)-1].ConfigRevision != after.revision {
-		t.Fatal("pending revision not rebased")
-	}
-	if err = m.migrateFlatExtensions(); err != nil {
+	if err := m.migrateFlatExtensions(); err != nil {
 		t.Fatal("migration not idempotent", err)
 	}
 }

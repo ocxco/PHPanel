@@ -16,11 +16,19 @@ func siteFixture(t *testing.T) (*Manager, Instance, Instance, Instance, Instance
 	if err != nil {
 		t.Fatal(err)
 	}
-	php, err := m.ImportArchive("php", "fixture", writeFixture(t, testZIP(t, map[string][]byte{"php-cgi.exe": fakePE()})), "")
-	if err != nil {
-		t.Fatal(err)
+	phpFixture := func(version string) InstalledPackage {
+		pkg, err := m.ImportArchive("php", version, writeFixture(t, testZIP(t, map[string][]byte{"php-cgi.exe": fakePE(), "version.txt": []byte(version)})), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return pkg
 	}
+	php1 := phpFixture("fixture")
+	php2 := phpFixture("fixture2")
 	create := func(p InstalledPackage, name string, port int) Instance {
+		if p.Component == "php" {
+			return phpRuntimeFromPackage(t, m, p, port)
+		}
 		i, err := m.CreateInstance(p.ID, name, port)
 		if err != nil {
 			t.Fatal(err)
@@ -29,8 +37,8 @@ func siteFixture(t *testing.T) (*Manager, Instance, Instance, Instance, Instance
 	}
 	a := create(nginx, "first", 18081)
 	b := create(nginx, "second", 18082)
-	p := create(php, "php-first", 19001)
-	q := create(php, "php-second", 19002)
+	p := create(php1, "php-first", 19001)
+	q := create(php2, "php-second", 19002)
 	m.nginxValidator = func(Instance, InstalledPackage, string) error { return nil }
 	return m, a, b, p, q
 }

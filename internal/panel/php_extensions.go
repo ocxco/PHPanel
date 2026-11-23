@@ -92,7 +92,12 @@ if(preg_match('/PHP Extension Build\s*=>\s*([^\r\n]+)/',$info,$v)){$build=trim($
 $zendbuild=''; if(preg_match('/Zend Extension Build\s*=>\s*([^\r\n]+)/',$info,$v)){$zendbuild=trim($v[1]);}
 echo 'PHPANEL_DIAGNOSTIC:'.json_encode(['version'=>PHP_VERSION,'bits'=>PHP_INT_SIZE*8,'threadSafe'=>(bool)PHP_ZTS,'build'=>$build,'zendBuild'=>$zendbuild,'modules'=>$m,'zend'=>get_loaded_extensions(true),'settings'=>$s,'ini'=>(string)php_ini_loaded_file(),'scanned'=>(string)php_ini_scanned_files()]);`
 
-func phpEnvironment(scan string, libraryDirs ...string) []string {
+// phpEnvironment builds the environment for a PHP process. PHPRC names the
+// instance php.ini without relying on the command line, so processes PHP
+// spawns itself (php_binary() workers, the built-in -S server, proc_open) load
+// the same main configuration as the parent instead of falling back to the
+// build-time defaults such as C:\php\ext. PHP_INI_SCAN_DIR covers conf.d.
+func phpEnvironment(ini, scan string, libraryDirs ...string) []string {
 	env := []string{}
 	pathValue := ""
 	for _, value := range os.Environ() {
@@ -107,6 +112,9 @@ func phpEnvironment(scan string, libraryDirs ...string) []string {
 	}
 	if len(libraryDirs) > 0 {
 		env = append(env, "PATH="+strings.Join(libraryDirs, string(os.PathListSeparator))+string(os.PathListSeparator)+pathValue)
+	}
+	if ini != "" {
+		env = append(env, "PHPRC="+nativePath(ini))
 	}
 	return append(env, "PHP_INI_SCAN_DIR="+nativePath(scan))
 }
@@ -172,9 +180,9 @@ func probePHP(p InstalledPackage, ini, scan string, workingDirectory ...string) 
 		cmd.Dir = nativePath(workingDirectory[0])
 	}
 	if ini != "" {
-		cmd.Env = phpEnvironment(scan, phpLibraryDirs(ini, scan)...)
+		cmd.Env = phpEnvironment(ini, scan, phpLibraryDirs(ini, scan)...)
 	} else {
-		cmd.Env = phpEnvironment(scan)
+		cmd.Env = phpEnvironment("", scan)
 	}
 	var out, warnings phpProbeOutput
 	cmd.Stdout = &out
@@ -208,6 +216,59 @@ type phpINISet struct {
 	revision string
 }
 
+// extractManagedBlock returns the body between the PHPMANAGED markers in a
+// php.ini, or nil when no managed block is present.
+func extractManagedBlock(main []byte) []byte {
+	lines := strings.Split(string(main), "\n")
+	start, end := -1, -1
+	for n, line := range lines {
+		switch strings.TrimSpace(line) {
+		case phpManagedBegin:
+			start = n
+		case phpManagedEnd:
+			end = n
+		}
+		if end >= 0 {
+			break
+		}
+	}
+	if start < 0 || end <= start {
+		return nil
+	}
+	return []byte(strings.Join(lines[start+1:end], "\n"))
+}
+
+// insertManagedBlock returns main with the managed block replaced by managed
+// (wrapped in markers). When no markers exist, the block is appended at the
+// end. Everything outside the markers is preserved verbatim, so hand-edits
+// outside the block survive an extension toggle.
+func insertManagedBlock(main, managed []byte) []byte {
+	lines := strings.Split(string(main), "\n")
+	start, end := -1, -1
+	for n, line := range lines {
+		trim := strings.TrimSpace(line)
+		if trim == phpManagedBegin {
+			start = n
+		}
+		if trim == phpManagedEnd {
+			end = n
+			break
+		}
+	}
+	body := strings.Split(strings.TrimRight(string(managed), "\n"), "\n")
+	if start < 0 || end <= start {
+		out := append([]string{}, lines...)
+		out = append(out, phpManagedBegin)
+		out = append(out, body...)
+		out = append(out, phpManagedEnd)
+		return []byte(strings.Join(out, "\n"))
+	}
+	out := append([]string{}, lines[:start+1]...)
+	out = append(out, body...)
+	out = append(out, lines[end:]...)
+	return []byte(strings.Join(out, "\n"))
+}
+
 func readPHPINI(i Instance) (phpINISet, error) {
 	set := phpINISet{scan: map[string][]byte{}}
 	read := func(path string) ([]byte, error) {
@@ -225,33 +286,43 @@ func readPHPINI(i Instance) (phpINISet, error) {
 		return body, err
 	}
 	var err error
-	set.main, err = read(filepath.Join(i.Path, "config", "php.ini"))
+	set.main, err = read(phpINIPath(i))
 	if err != nil {
 		return set, err
 	}
-	dir := filepath.Join(i.Path, "config", "conf.d")
-	entries, err := os.ReadDir(dir)
-	if err != nil && !os.IsNotExist(err) {
-		return set, err
-	}
-	for _, e := range entries {
-		if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".ini") {
-			if len(set.scan) >= 64 {
-				return set, fmt.Errorf("扩展扫描目录超过 64 个配置文件")
+	if i.Component == "php" {
+		// PHP managed extensions are an inline block inside package/php.ini;
+		// there is no conf.d, so grandchild processes (which may not inherit
+		// PHP_INI_SCAN_DIR) still load them. Expose the block body as the
+		// managed document so the rest of the extension pipeline is unchanged.
+		if body := extractManagedBlock(set.main); body != nil {
+			set.scan[phpManagedINI] = body
+		}
+	} else {
+		dir := phpConfDPath(i)
+		entries, readErr := os.ReadDir(dir)
+		if readErr != nil && !os.IsNotExist(readErr) {
+			return set, readErr
+		}
+		for _, e := range entries {
+			if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".ini") {
+				if len(set.scan) >= 64 {
+					return set, fmt.Errorf("扩展扫描目录超过 64 个配置文件")
+				}
+				real, statErr := PhysicalPath(filepath.Join(dir, e.Name()))
+				if statErr != nil || !within(i.Path, real) {
+					return set, fmt.Errorf("扩展配置路径超出实例目录")
+				}
+				b, readErr := read(real)
+				if readErr != nil {
+					return set, readErr
+				}
+				name := e.Name()
+				if strings.EqualFold(name, phpManagedINI) {
+					name = phpManagedINI
+				}
+				set.scan[name] = b
 			}
-			real, err := PhysicalPath(filepath.Join(dir, e.Name()))
-			if err != nil || !within(i.Path, real) {
-				return set, fmt.Errorf("扩展配置路径超出实例目录")
-			}
-			b, err := read(real)
-			if err != nil {
-				return set, err
-			}
-			name := e.Name()
-			if strings.EqualFold(name, phpManagedINI) {
-				name = phpManagedINI
-			}
-			set.scan[name] = b
 		}
 	}
 	var all bytes.Buffer
@@ -463,7 +534,7 @@ func (m *Manager) phpExtensionReport(i Instance, p InstalledPackage) (PHPExtensi
 	if err != nil {
 		return report, err
 	}
-	base, _, err := probePHP(p, "", filepath.Join(i.Path, "config", "conf.d"), i.Path)
+	base, _, err := probePHP(p, "", phpConfDPath(i), i.Path)
 	if err != nil {
 		return report, err
 	}
@@ -471,7 +542,7 @@ func (m *Manager) phpExtensionReport(i Instance, p InstalledPackage) (PHPExtensi
 	if err != nil {
 		return report, err
 	}
-	configured, warnings, err := probePHP(p, filepath.Join(i.Path, "config", "php.ini"), filepath.Join(i.Path, "config", "conf.d"), i.Path)
+	configured, warnings, err := probePHP(p, phpINIPath(i), phpConfDPath(i), i.Path)
 	if err != nil {
 		warnings = err.Error()
 	}
@@ -558,7 +629,7 @@ func (m *Manager) phpExtensionReport(i Instance, p InstalledPackage) (PHPExtensi
 		}
 		// A process launched before scan-directory support needs a restart even
 		// when the current selected modules happen to be identical.
-		if len(set.scan) > 0 && !strings.Contains(strings.ToLower(strings.ReplaceAll(actual.Scanned, "\\", "/")), strings.ToLower(normalized(filepath.Join(i.Path, "config", "conf.d")))) {
+		if i.Component != "php" && len(set.scan) > 0 && !strings.Contains(strings.ToLower(strings.ReplaceAll(actual.Scanned, "\\", "/")), strings.ToLower(normalized(phpConfDPath(i)))) {
 			report.Pending = true
 		}
 	}
@@ -661,7 +732,7 @@ func phpCandidate(set phpINISet, rows []PHPExtension, req PHPSettingsRequest) ([
 	}
 	lines := strings.Split(string(set.main), "\n")
 	for line := range remove {
-		lines[line] = "; PHPanel moved to conf.d/" + phpManagedINI + ": " + strings.TrimRight(lines[line], "\r")
+		lines[line] = "; PHPanel moved to managed block: " + strings.TrimRight(lines[line], "\r")
 	}
 	main := []byte(strings.Join(lines, "\n"))
 	var managed strings.Builder
@@ -770,29 +841,48 @@ func (m *Manager) savePHPExtensionsReserved(i Instance, p InstalledPackage, req 
 	if err != nil {
 		return PHPExtensionReport{}, err
 	}
+	// For PHP the managed block lives inline in package/php.ini; the candidate
+	// is validated with no scan dir so the check matches what grandchild
+	// processes (which do not inherit PHP_INI_SCAN_DIR) will actually load.
+	inline := i.Component == "php"
+	var final []byte
+	if inline {
+		final = insertManagedBlock(main, managed)
+	}
 	stage, err := os.MkdirTemp(filepath.Join(i.Path, "temp"), "php-extensions-")
 	if err != nil {
 		return PHPExtensionReport{}, err
 	}
 	defer os.RemoveAll(stage)
-	scan := filepath.Join(stage, "conf.d")
-	if err = os.Mkdir(scan, 0700); err != nil {
-		return PHPExtensionReport{}, err
-	}
-	if err = os.WriteFile(filepath.Join(stage, "php.ini"), main, 0600); err != nil {
-		return PHPExtensionReport{}, err
-	}
-	for name, b := range set.scan {
-		if !strings.EqualFold(name, phpManagedINI) {
-			if err = os.WriteFile(filepath.Join(scan, name), b, 0600); err != nil {
-				return PHPExtensionReport{}, err
+	var probeIni, probeScan string
+	if inline {
+		if err = os.WriteFile(filepath.Join(stage, "php.ini"), final, 0600); err != nil {
+			return PHPExtensionReport{}, err
+		}
+		probeIni = filepath.Join(stage, "php.ini")
+		probeScan = ""
+	} else {
+		scan := filepath.Join(stage, "conf.d")
+		if err = os.Mkdir(scan, 0700); err != nil {
+			return PHPExtensionReport{}, err
+		}
+		if err = os.WriteFile(filepath.Join(stage, "php.ini"), main, 0600); err != nil {
+			return PHPExtensionReport{}, err
+		}
+		for name, b := range set.scan {
+			if !strings.EqualFold(name, phpManagedINI) {
+				if err = os.WriteFile(filepath.Join(scan, name), b, 0600); err != nil {
+					return PHPExtensionReport{}, err
+				}
 			}
 		}
+		if err = os.WriteFile(filepath.Join(scan, phpManagedINI), managed, 0600); err != nil {
+			return PHPExtensionReport{}, err
+		}
+		probeIni = filepath.Join(stage, "php.ini")
+		probeScan = scan
 	}
-	if err = os.WriteFile(filepath.Join(scan, phpManagedINI), managed, 0600); err != nil {
-		return PHPExtensionReport{}, err
-	}
-	checked, warnings, err := probePHP(p, filepath.Join(stage, "php.ini"), scan, i.Path)
+	checked, warnings, err := probePHP(p, probeIni, probeScan, i.Path)
 	if err != nil {
 		return PHPExtensionReport{}, err
 	}
@@ -823,26 +913,36 @@ func (m *Manager) savePHPExtensionsReserved(i Instance, p InstalledPackage, req 
 	if latest.revision != set.revision {
 		return PHPExtensionReport{}, fmt.Errorf("文件已被修改，请刷新扩展列表后再保存")
 	}
-	mainPath := filepath.Join(i.Path, "config", "php.ini")
-	managedPath := filepath.Join(i.Path, "config", "conf.d", phpManagedINI)
-	if err = os.MkdirAll(filepath.Dir(managedPath), 0700); err != nil {
-		return PHPExtensionReport{}, err
-	}
-	if err = os.WriteFile(mainPath+".before-extensions", set.main, 0600); err != nil {
-		return PHPExtensionReport{}, err
-	}
-	old, exists := set.scan[phpManagedINI]
-	if exists {
-		if err = os.WriteFile(managedPath+".before-extensions", old, 0600); err != nil {
+	if inline {
+		mainPath := phpINIPath(i)
+		if err = os.WriteFile(mainPath+".before-extensions", set.main, 0600); err != nil {
 			return PHPExtensionReport{}, err
 		}
-	}
-	if err = atomicConfigWrite(mainPath, main); err != nil {
-		return PHPExtensionReport{}, err
-	}
-	if err = atomicConfigWrite(managedPath, managed); err != nil {
-		rollback := atomicConfigWrite(mainPath, set.main)
-		return PHPExtensionReport{}, fmt.Errorf("保存扩展配置失败: %v；恢复主配置: %v", err, rollback)
+		if err = atomicConfigWrite(mainPath, final); err != nil {
+			return PHPExtensionReport{}, err
+		}
+	} else {
+		mainPath := filepath.Join(i.Path, "config", "php.ini")
+		managedPath := filepath.Join(i.Path, "config", "conf.d", phpManagedINI)
+		if err = os.MkdirAll(filepath.Dir(managedPath), 0700); err != nil {
+			return PHPExtensionReport{}, err
+		}
+		if err = os.WriteFile(mainPath+".before-extensions", set.main, 0600); err != nil {
+			return PHPExtensionReport{}, err
+		}
+		old, exists := set.scan[phpManagedINI]
+		if exists {
+			if err = os.WriteFile(managedPath+".before-extensions", old, 0600); err != nil {
+				return PHPExtensionReport{}, err
+			}
+		}
+		if err = atomicConfigWrite(mainPath, main); err != nil {
+			return PHPExtensionReport{}, err
+		}
+		if err = atomicConfigWrite(managedPath, managed); err != nil {
+			rollback := atomicConfigWrite(mainPath, set.main)
+			return PHPExtensionReport{}, fmt.Errorf("保存扩展配置失败: %v；恢复主配置: %v", err, rollback)
+		}
 	}
 	return m.phpExtensionReport(i, p)
 }
@@ -867,7 +967,7 @@ func (m *Manager) RestartPHPWithExtensions(key, revision string) error {
 	if set.revision != revision {
 		return fmt.Errorf("配置已变化，请刷新后再重启")
 	}
-	_, warnings, err := probePHP(p, filepath.Join(i.Path, "config", "php.ini"), filepath.Join(i.Path, "config", "conf.d"), i.Path)
+	_, warnings, err := probePHP(p, phpINIPath(i), phpConfDPath(i), i.Path)
 	if err != nil {
 		return err
 	}

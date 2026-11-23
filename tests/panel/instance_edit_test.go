@@ -17,12 +17,21 @@ func TestInstancePortChangesPreserveConfiguration(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			i, err := m.CreateInstance(p.ID, "port test", 19111)
-			if err != nil {
-				t.Fatal(err)
+			var i Instance
+			if component == "php" {
+				i = phpRuntimeFromPackage(t, m, p, 19111)
+			} else {
+				i, err = m.CreateInstance(p.ID, "port test", 19111)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			filename := map[string]string{"redis": "redis.conf", "mysql": "my.ini", "php": "php.ini"}[component]
-			path := filepath.Join(i.Path, "config", filename)
+			dir := filepath.Join(i.Path, "config")
+			if component == "php" {
+				dir = i.Path
+			}
+			path := filepath.Join(dir, filename)
 			body, _ := os.ReadFile(path)
 			body = append(body, []byte("\n# personal preference\n")...)
 			if err = os.WriteFile(path, body, 0600); err != nil {

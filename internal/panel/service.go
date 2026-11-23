@@ -21,8 +21,42 @@ type managedProcess struct {
 	log           *os.File
 }
 
+// instanceFromPackage synthesizes an Instance view of a PHP package. After the
+// PHP package==runtime merge there are no PHP Instance rows; this lets the large
+// body of runtime/extension code (written against Instance) keep working. The
+// synthesized Instance.Path is the package directory and its runtime fields are
+// copied from the package's embedded PHPRuntime.
+func instanceFromPackage(p InstalledPackage) Instance {
+	return Instance{
+		ID:               p.ID,
+		PackageID:        p.ID,
+		Name:             p.Version,
+		Component:        p.Component,
+		Version:          p.Version,
+		Port:             p.Port,
+		Path:             p.Path,
+		Status:           p.Status,
+		PID:              p.PID,
+		Error:            p.Error,
+		LinkedNginxID:    p.LinkedNginxID,
+		LinkedRun:        p.LinkedRun,
+		ServiceName:      p.ServiceName,
+		ServiceAutoStart: p.ServiceAutoStart,
+		NginxAutoPHP:     p.NginxAutoPHP,
+		NginxStopPHP:     p.NginxStopPHP,
+		DirectoryName:    p.DirectoryName,
+	}
+}
+
 func (m *Manager) lookupInstance(key string) (Instance, InstalledPackage, error) {
 	state := m.Snapshot()
+	// Merged PHP: a package id is the runtime id (no PHP Instance rows).
+	for _, p := range state.Packages {
+		if p.ID == key && p.Component == "php" {
+			return instanceFromPackage(p), p, nil
+		}
+	}
+	// Legacy instances: nginx / mysql / redis (and pre-migration PHP).
 	for _, i := range state.Instances {
 		if i.ID == key {
 			for _, p := range state.Packages {
@@ -52,6 +86,10 @@ func (m *Manager) CreateInstance(packageID, name string, port int) (Instance, er
 	if p.ID == "" {
 		m.mu.Unlock()
 		return Instance{}, fmt.Errorf("请先安装此版本")
+	}
+	if p.Component == "php" {
+		m.mu.Unlock()
+		return Instance{}, fmt.Errorf("PHP 包即为运行时，无需创建实例")
 	}
 	if p.Component == "nginx" {
 		port = 0
@@ -145,6 +183,14 @@ func (m *Manager) writeInstanceConfig(i Instance, p InstalledPackage) error {
 }
 func (m *Manager) setInstance(key, status, detail string, pid int) error {
 	return m.change(func(s *State) error {
+		for n := range s.Packages {
+			if s.Packages[n].ID == key && s.Packages[n].Component == "php" {
+				s.Packages[n].Status = status
+				s.Packages[n].Error = detail
+				s.Packages[n].PID = pid
+				return nil
+			}
+		}
 		for n := range s.Instances {
 			if s.Instances[n].ID == key {
 				s.Instances[n].Status = status
@@ -153,7 +199,7 @@ func (m *Manager) setInstance(key, status, detail string, pid int) error {
 				return nil
 			}
 		}
-		return fmt.Errorf("实例不存在")
+		return fmt.Errorf("实例或运行时不存在")
 	})
 }
 func checkPort(port int) error {
@@ -290,10 +336,13 @@ func (m *Manager) startInstanceWithLease(key string, restarting bool, supplied *
 		return fail(err)
 	}
 	cfg := filepath.Join(i.Path, "config")
+	if i.Component == "php" {
+		cfg = phpConfigDir(i)
+	}
 	args := []string{}
 	switch i.Component {
 	case "php":
-		args = []string{"-c", nativePath(filepath.Join(cfg, "php.ini")), "-b", fmt.Sprintf("127.0.0.1:%d", i.Port)}
+		args = []string{"-c", nativePath(phpINIPath(i)), "-b", fmt.Sprintf("127.0.0.1:%d", i.Port)}
 	case "redis":
 		args = []string{nativePath(filepath.Join(cfg, "redis.conf"))}
 		if _, err := os.Stat(filepath.Join(filepath.Dir(p.Executable), "cygwin1.dll")); err == nil {
@@ -326,12 +375,9 @@ func (m *Manager) startInstanceWithLease(key string, restarting bool, supplied *
 	cmd := exec.Command(p.Executable, args...)
 	cmd.Dir = nativePath(i.Path)
 	if i.Component == "php" {
-		scan := filepath.Join(cfg, "conf.d")
-		if err := os.MkdirAll(scan, 0700); err != nil {
-			logfile.Close()
-			return fail(err)
-		}
-		cmd.Env = phpEnvironment(scan, phpLibraryDirs(filepath.Join(cfg, "php.ini"), scan)...)
+		ini := phpINIPath(i)
+		scan := phpConfDPath(i)
+		cmd.Env = phpEnvironment(ini, scan, phpLibraryDirs(ini, scan)...)
 	}
 	cmd.Stdout = logfile
 	cmd.Stderr = logfile
@@ -377,17 +423,19 @@ func (m *Manager) startInstanceWithLease(key string, restarting bool, supplied *
 	m.mu.Unlock()
 	if i.Component == "php" {
 		proc.runtimeServer, err = servePHPRuntime(m, i, proc)
-		if err != nil {
-			m.mu.Lock()
-			delete(m.processes, key)
-			m.mu.Unlock()
-			_ = guard.kill()
-			_ = cmd.Wait()
-			guard.close()
-			logfile.Close()
-			lease.release()
-			return fail(err)
-		}
+	} else if i.Component == "nginx" && m.serviceHost {
+		proc.runtimeServer, err = serveNginxRuntime(m, i, proc)
+	}
+	if err != nil {
+		m.mu.Lock()
+		delete(m.processes, key)
+		m.mu.Unlock()
+		_ = guard.kill()
+		_ = cmd.Wait()
+		guard.close()
+		logfile.Close()
+		lease.release()
+		return fail(err)
 	}
 	go func() {
 		waitErr := cmd.Wait()
@@ -706,7 +754,16 @@ func (m *Manager) canStartLocked(i Instance) error {
 		}
 		return fmt.Errorf("此已安装版本已有实例正在启动")
 	}
-	for _, other := range m.state.Instances {
+	// Runtime views: legacy instances plus synthesized PHP packages (PHP
+	// package == runtime after the merge; there are no PHP Instance rows).
+	runtimes := make([]Instance, 0, len(m.state.Instances)+len(m.state.Packages))
+	runtimes = append(runtimes, m.state.Instances...)
+	for _, p := range m.state.Packages {
+		if p.Component == "php" {
+			runtimes = append(runtimes, instanceFromPackage(p))
+		}
+	}
+	for _, other := range runtimes {
 		conflict := other.PackageID == i.PackageID
 		if i.Component == "nginx" {
 			conflict = other.Component == "nginx"

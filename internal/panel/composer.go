@@ -209,7 +209,7 @@ func (m *Manager) runComposerDownload(ctx context.Context, key string) error {
 	defer cancel()
 	cmd := exec.CommandContext(checkCtx, filepath.Join(filepath.Dir(p.Executable), "php.exe"), "-n", cache, "--version", "--no-ansi")
 	cmd.Dir = filepath.Dir(p.Executable)
-	cmd.Env = phpEnvironment("")
+	cmd.Env = phpEnvironment("", "")
 	cmd.WaitDelay = 2 * time.Second
 	var output bytes.Buffer
 	cmd.Stdout = &output
@@ -260,7 +260,8 @@ func (m *Manager) runComposerDownload(ctx context.Context, key string) error {
 	if err = m.change(func(s *State) error {
 		s.Tools.ComposerVersion = a.Version
 		s.Tools.ComposerSHA256 = a.SHA256
-		if s.Tools.PHPInstanceID == "" {
+		if activePHPPackageID(*s) == "" {
+			s.Tools.PHPPackageID = i.ID
 			s.Tools.PHPInstanceID = i.ID
 		}
 		return nil

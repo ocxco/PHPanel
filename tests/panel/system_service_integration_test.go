@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -48,7 +50,8 @@ func TestNativeSystemServiceHostLifecycle(t *testing.T) {
 			}
 			if item.Component == "nginx" {
 				if _, err := m.CreateSiteWithOptions("service-test", "", i.ID, "", port, "static"); err != nil {
-					t.Fatal(err)
+					log, _ := m.ReadLog(i.ID)
+					t.Fatalf("%v\n%s", err, log)
 				}
 			}
 			if err := m.RegisterSystemService(i.ID, true); err != nil {
@@ -80,6 +83,42 @@ func TestNativeSystemServiceHostLifecycle(t *testing.T) {
 				case <-deadline:
 					t.Fatal("host did not report Running")
 				}
+			}
+			if item.Component == "nginx" {
+				f.services[i.ID] = systemServiceStatus{Exists: true, Status: "running", PID: 999, AutoStart: true}
+				m.systemServices = &pipeSystemServices{fakeSystemServices: f, root: m.root}
+				host.mu.Lock()
+				masterPID := host.processes[i.ID].cmd.Process.Pid
+				host.mu.Unlock()
+				site, err := m.CreateSiteWithOptions("service-reloaded", "", i.ID, "", port, "static")
+				if err != nil {
+					t.Fatal("running service site creation failed", err)
+				}
+				client := &http.Client{Timeout: time.Second}
+				deadline := time.Now().Add(5 * time.Second)
+				loaded := false
+				for time.Now().Before(deadline) {
+					request, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d", port), nil)
+					request.Host = site.Name + ".localhost"
+					response, err := client.Do(request)
+					if err == nil {
+						body, _ := io.ReadAll(response.Body)
+						response.Body.Close()
+						loaded = response.StatusCode == 200 && bytes.Contains(body, []byte(site.Name))
+					}
+					if loaded {
+						break
+					}
+					time.Sleep(50 * time.Millisecond)
+				}
+				host.mu.Lock()
+				proc := host.processes[i.ID]
+				unchanged := proc != nil && proc.cmd.Process.Pid == masterPID
+				host.mu.Unlock()
+				if !loaded || !unchanged {
+					t.Fatal("service reload did not publish the site without restarting the master", loaded, unchanged)
+				}
+				original, _ = os.ReadFile(m.statePath())
 			}
 			m.Close()
 			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), time.Second)

@@ -38,17 +38,43 @@ func (m *Manager) ResolveLocation(kind, key string) (Location, error) {
 			return Location{}, fmt.Errorf("程序目录不属于当前数据目录")
 		}
 	case "instance", "config", "data", "logs":
-		for _, i := range state.Instances {
-			if i.ID == key {
-				target = i.Path
+		var i Instance
+		found := false
+		for _, inst := range state.Instances {
+			if inst.ID == key {
+				i = inst
+				found = true
 				break
 			}
 		}
-		if target != "" && !within(filepath.Join(state.Root, "instances"), target) {
-			return Location{}, fmt.Errorf("实例目录不属于当前数据目录")
+		if !found {
+			// Merged PHP: a package id is the runtime id (no PHP Instance rows).
+			for _, p := range state.Packages {
+				if p.ID == key && p.Component == "php" {
+					i = instanceFromPackage(p)
+					found = true
+					break
+				}
+			}
 		}
-		if target != "" && kind != "instance" {
-			target = filepath.Join(target, kind)
+		if found {
+			base := i.Path
+			allowedRoot := filepath.Join(state.Root, "instances")
+			if i.Component == "php" {
+				allowedRoot = filepath.Join(state.Root, "packages")
+			}
+			if !within(allowedRoot, base) {
+				return Location{}, fmt.Errorf("实例目录不属于当前数据目录")
+			}
+			target = base
+			switch kind {
+			case "config":
+				target = phpConfigDir(i)
+			case "logs":
+				target = phpLogsDir(i)
+			case "data":
+				target = filepath.Join(base, "data")
+			}
 		}
 	case "archive":
 		artifactID := ""

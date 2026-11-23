@@ -170,24 +170,32 @@ func (b *windowsPHPRuntime) Start(i Instance, owner, run string) (phpRuntimeStat
 	return current, fmt.Errorf("PHP %s 未在 30 秒内启动，请查看实例日志", i.Name)
 }
 
-func servePHPRuntime(m *Manager, i Instance, proc *managedProcess) (runtimeServer, error) {
+// Only the original panel user, administrators and LocalSystem can use runtime pipes.
+func runtimePipeSecurity(m *Manager) (string, error) {
 	security, err := windows.GetNamedSecurityInfo(m.statePath(), windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	owner, _, err := security.Owner()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	userSID := owner.String()
 	if m.state.RuntimeUserSID != "" {
 		sid, err := windows.StringToSid(m.state.RuntimeUserSID)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		userSID = sid.String()
 	}
-	dacl := "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;" + userSID + ")"
+	return "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;" + userSID + ")", nil
+}
+
+func servePHPRuntime(m *Manager, i Instance, proc *managedProcess) (runtimeServer, error) {
+	dacl, err := runtimePipeSecurity(m)
+	if err != nil {
+		return nil, err
+	}
 	listener, err := winio.ListenPipe(phpPipeName(m.root, i.ID), &winio.PipeConfig{SecurityDescriptor: dacl, InputBufferSize: 4096, OutputBufferSize: 4096})
 	if err != nil {
 		return nil, fmt.Errorf("无法建立 PHP 本地管理通道: %w", err)
@@ -266,7 +274,12 @@ func RunLinkedPHPHost(root, key, owner, run string) error {
 	if err != nil {
 		return err
 	}
-	if i.Component != "php" || (owner != "" && run == "") || !within(filepath.Join(m.root, "instances"), i.Path) || !within(filepath.Join(m.root, "packages"), p.Executable) {
+	if i.Component != "php" || (owner != "" && run == "") {
+		return fmt.Errorf("后台 PHP 实例或程序路径无效")
+	}
+	// PHP package == runtime: its directory lives under packages/, not instances/.
+	pkgRoot := filepath.Join(m.root, "packages")
+	if !within(pkgRoot, i.Path) || !within(pkgRoot, p.Executable) {
 		return fmt.Errorf("后台 PHP 实例或程序路径无效")
 	}
 	if owner != "" {

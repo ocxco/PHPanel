@@ -16,6 +16,24 @@ type Artifact struct {
 	SignatureURL       string   `json:"signatureUrl,omitempty"`
 	SignatureAuthority string   `json:"signatureAuthority,omitempty"`
 }
+
+// PHPRuntime holds the per-runtime state that historically lived on an Instance.
+// For PHP (merged: package == runtime) it is embedded in InstalledPackage; for
+// nginx/mysql/redis it remains embedded in Instance. JSON tags match the legacy
+// Instance fields exactly so existing panel.json deserialization is unaffected.
+type PHPRuntime struct {
+	NginxAutoPHP     *bool  `json:"nginxAutoPHP,omitempty"`
+	NginxStopPHP     bool   `json:"nginxStopPHP"`
+	LinkedNginxID    string `json:"linkedNginxId,omitempty"`
+	LinkedRun        string `json:"linkedRun,omitempty"`
+	ServiceName      string `json:"serviceName,omitempty"`
+	ServiceAutoStart bool   `json:"serviceAutoStart"`
+	Port             int    `json:"port"`
+	Status           string `json:"status"`
+	PID              int    `json:"pid"`
+	Error            string `json:"error"`
+}
+
 type InstalledPackage struct {
 	DirectoryName string `json:"directoryName,omitempty"`
 	ID            string `json:"id"`
@@ -27,6 +45,7 @@ type InstalledPackage struct {
 	Path          string `json:"path"`
 	Executable    string `json:"executable"`
 	InstalledAt   string `json:"installedAt"`
+	PHPRuntime
 }
 type Instance struct {
 	NginxAutoPHP     *bool  `json:"nginxAutoPHP,omitempty"`

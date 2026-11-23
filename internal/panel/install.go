@@ -190,7 +190,31 @@ func (m *Manager) installZIPContext(ctx context.Context, a Artifact, archive str
 		return InstalledPackage{}, err
 	}
 	p := InstalledPackage{DirectoryName: filepath.Base(target), ID: a.ID, Component: a.Component, Version: a.Version, Publisher: a.Publisher, SHA256: hash, Verification: a.Verification, Path: target, Executable: filepath.Join(target, rel), InstalledAt: timestamp()}
-	if err := m.change(func(s *State) error { s.Packages = append(s.Packages, p); return nil }); err != nil {
+	if a.Component == "php" {
+		// PHP 包即运行时：安装时直接生成包级 php.ini 并分配端口，无需再建实例。
+		port, err := m.allocateFreePort("php")
+		if err != nil {
+			_ = os.RemoveAll(target)
+			return InstalledPackage{}, err
+		}
+		p.Port = port
+		p.Status = "stopped"
+		if err := writePHPBaseConfig(p); err != nil {
+			_ = os.RemoveAll(target)
+			return InstalledPackage{}, err
+		}
+	}
+	if err := m.change(func(s *State) error {
+		if a.Component == "php" {
+			for _, existing := range s.Packages {
+				if existing.Port == p.Port {
+					return fmt.Errorf("端口 %d 已被占用，请重试安装", p.Port)
+				}
+			}
+		}
+		s.Packages = append(s.Packages, p)
+		return nil
+	}); err != nil {
 		_ = os.RemoveAll(target)
 		return InstalledPackage{}, err
 	}
@@ -234,6 +258,19 @@ func (m *Manager) RemovePackage(key string) error {
 		return fmt.Errorf("版本不存在")
 	}
 	p := m.state.Packages[index]
+	if p.Component == "php" {
+		if m.processes[key] != nil || p.PID > 0 || p.Status == "starting" || p.Status == "running" || p.Status == "stopping" {
+			return fmt.Errorf("请先停止此 PHP，再卸载")
+		}
+		for _, site := range m.state.Sites {
+			if site.PHPID == key {
+				return fmt.Errorf("此 PHP 被网站 %s 引用，请先修改或删除该网站", site.Name)
+			}
+		}
+		if m.state.Tools.PHPPackageID == key || m.state.Tools.PHPInstanceID == key {
+			return fmt.Errorf("此 PHP 是当前命令行 PHP，请先在设置中选择其它 PHP")
+		}
+	}
 	root := filepath.Join(m.root, "packages")
 	if !within(root, p.Path) {
 		return fmt.Errorf("安装目录越界")

@@ -24,6 +24,7 @@ type systemServiceBackend interface {
 	Remove(Instance) error
 	Start(Instance) error
 	Stop(Instance) error
+	ReloadNginx(Instance) error
 }
 
 func supportsSystemService(component string) bool {

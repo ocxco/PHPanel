@@ -26,20 +26,15 @@ func nginxPHPDependencies(state State) ([]Instance, error) {
 			ids[site.PHPID] = true
 		}
 	}
+	// A PHP package is its own runtime; resolve each referenced PHPID against
+	// the installed PHP packages and synthesize an Instance view.
 	var result []Instance
-	packages := map[string]string{}
-	for _, i := range state.Instances {
-		if ids[i.ID] {
-			if i.Component != "php" {
-				return nil, fmt.Errorf("网站引用的 %s 不是 PHP 实例", i.Name)
-			}
-			if old := packages[i.PackageID]; old != "" {
-				return nil, fmt.Errorf("网站引用了同一已安装 PHP 版本的多个实例（%s、%s），请统一实例选择", old, i.Name)
-			}
-			packages[i.PackageID] = i.Name
-			result = append(result, i)
-			delete(ids, i.ID)
+	for _, p := range state.Packages {
+		if p.Component != "php" || !ids[p.ID] {
+			continue
 		}
+		result = append(result, instanceFromPackage(p))
+		delete(ids, p.ID)
 	}
 	if len(ids) > 0 {
 		return nil, fmt.Errorf("网站引用的 PHP 实例不存在，请先更新网站设置")
@@ -263,6 +258,13 @@ func (m *Manager) ensureLinkedPHP(i Instance, owner, run string) (bool, error) {
 		return false, err
 	}
 	err = m.change(func(s *State) error {
+		for n := range s.Packages {
+			if s.Packages[n].ID == i.ID && s.Packages[n].Component == "php" {
+				s.Packages[n].LinkedNginxID = owner
+				s.Packages[n].LinkedRun = run
+				return nil
+			}
+		}
 		for n := range s.Instances {
 			if s.Instances[n].ID == i.ID {
 				s.Instances[n].LinkedNginxID = owner
