@@ -956,128 +956,124 @@ export default function App() {
                       <div className="instance-grid">
                         {group.map((i) => (
                           <article className="instance-card" key={i.id}>
-                            <ComponentMark type={i.component} small />
-                            <div className="instance-info">
-                              <strong>
-                                {i.name}
-                                <Badge status={i.status} />
-                                {i.name !==
-                                  `${label[i.component]} ${i.version}` && (
-                                  <span className="mono">
-                                    {label[i.component]} {i.version}
-                                  </span>
-                                )}
-                              </strong>
-                              <small>
-                                {i.component === "nginx" ? (
-                                  "监听端口由站点管理"
-                                ) : (
-                                  <>
-                                    127.0.0.1:
-                                    <span className="mono">{i.port}</span>
-                                  </>
-                                )}
-                                {i.pid > 0 && ` · PID ${i.pid}`}
-                                {i.serviceName && ` · 系统服务${i.serviceAutoStart ? " · 开机启动" : ""}`}
-                                {i.linkedNginxId && " · Nginx 联动"}
-                              </small>
-                              <div className="folder-links">
-                                {i.component !== "php" && <button className="text-button" disabled={!!busy} onClick={() => setModal({kind:"system-service",instance:i})}><ShieldCheck size={12}/>{i.component === "nginx" ? "启动设置" : "系统服务"}</button>}
-                                {i.component !== "nginx" && <button className="text-button" disabled={!!busy || ["running", "starting", "stopping"].includes(i.status)} onClick={() => setModal({kind:"edit-instance",instance:i})} title="停止实例后修改端口"><Settings2 size={12} />修改端口</button>}
-                                {i.component === "php" && (
-                                  <button className="text-button" disabled={!!busy || i.status === "starting" || i.status === "stopping"}
-                                    onClick={() => setModal({ kind: "php-extensions", instance: i })}>
-                                    <Settings2 size={12} />扩展管理
-                                  </button>
-                                )}
+                            <div className="instance-card-top">
+                              <ComponentMark type={i.component} small />
+                              <div className="instance-info">
+                                <strong>
+                                  {i.name}
+                                  <Badge status={i.status} />
+                                  {i.name !==
+                                    `${label[i.component]} ${i.version}` && (
+                                    <span className="mono">
+                                      {label[i.component]} {i.version}
+                                    </span>
+                                  )}
+                                </strong>
+                                <small>
+                                  {i.component === "nginx" ? (
+                                    "监听端口由站点管理"
+                                  ) : (
+                                    <>
+                                      127.0.0.1:
+                                      <span className="mono">{i.port}</span>
+                                    </>
+                                  )}
+                                  {i.pid > 0 && ` · PID ${i.pid}`}
+                                  {i.serviceName && ` · 系统服务${i.serviceAutoStart ? " · 开机启动" : ""}`}
+                                  {i.linkedNginxId && " · Nginx 联动"}
+                                </small>
+                              </div>
+                              <div className="instance-card-power">
                                 <button
+                                  className={`button compact ${i.status === "running" ? "stop" : "start"}`}
+                                  disabled={
+                                    !!busy ||
+                                    ["starting", "stopping"].includes(i.status) ||
+                                    (i.status !== "running" &&
+                                      i.component !== "php" &&
+                                      state.instances.some(
+                                        (other) =>
+                                          other.id !== i.id &&
+                                          (i.component === "nginx"
+                                            ? other.component === "nginx"
+                                            : other.packageId === i.packageId) &&
+                                          [
+                                            "running",
+                                            "starting",
+                                            "stopping",
+                                          ].includes(other.status),
+                                      ))
+                                  }
+                                  onClick={() =>
+                                    void action(
+                                      i.id,
+                                      () =>
+                                        call(
+                                          i.status === "running"
+                                            ? "StopInstance"
+                                            : "StartInstance",
+                                          i.id,
+                                        ),
+                                      i.status === "running"
+                                        ? "实例已停止"
+                                        : "实例已启动",
+                                    )
+                                  }
+                                >
+                                  {busy === i.id ? (
+                                    <LoaderCircle size={12} className="spin" />
+                                  ) : null}
+                                  {i.status === "running" ? "停止" : "启动"}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="folder-links">
+                              {i.component !== "php" && <button className="text-button" disabled={!!busy} onClick={() => setModal({kind:"system-service",instance:i})}>{i.component === "nginx" ? "启动设置" : "系统服务"}</button>}
+                              {i.component !== "nginx" && <button className="text-button" disabled={!!busy || ["running", "starting", "stopping"].includes(i.status)} onClick={() => setModal({kind:"edit-instance",instance:i})} title="停止实例后修改端口">修改端口</button>}
+                              {i.component === "php" && (
+                                <button className="text-button" disabled={!!busy || i.status === "starting" || i.status === "stopping"}
+                                  onClick={() => setModal({ kind: "php-extensions", instance: i })}>
+                                  扩展管理
+                                </button>
+                              )}
+                              <button
+                                className="text-button"
+                                disabled={!!busy}
+                                onClick={() =>
+                                  setModal({ kind: "config", instance: i })
+                                }
+                              >
+                                编辑配置
+                              </button>
+                              {[
+                                { kind: "instance", label: "实例目录" },
+                                { kind: "data", label: "数据" },
+                                { kind: "logs", label: "日志文件夹" },
+                              ].map((location) => (
+                                <button
+                                  key={location.kind}
                                   className="text-button"
                                   disabled={!!busy}
                                   onClick={() =>
-                                    setModal({ kind: "config", instance: i })
+                                    void action(
+                                      `${location.kind}-${i.id}`,
+                                      () =>
+                                        call(
+                                          "OpenLocation",
+                                          location.kind,
+                                          i.id,
+                                        ),
+                                    )
                                   }
                                 >
-                                  <Pencil size={12} />
-                                  编辑配置
+                                  {location.label}
                                 </button>
-                                {[
-                                  { kind: "instance", label: "实例目录" },
-                                  { kind: "data", label: "数据" },
-                                  { kind: "logs", label: "日志文件夹" },
-                                ].map((location) => (
-                                  <button
-                                    key={location.kind}
-                                    className="text-button"
-                                    disabled={!!busy}
-                                    onClick={() =>
-                                      void action(
-                                        `${location.kind}-${i.id}`,
-                                        () =>
-                                          call(
-                                            "OpenLocation",
-                                            location.kind,
-                                            i.id,
-                                          ),
-                                      )
-                                    }
-                                  >
-                                    <FolderOpen size={12} />
-                                    {location.label}
-                                  </button>
-                                ))}
-                              </div>
-                              {i.error && (
-                                <span className="inline-error">{i.error.replace("[ADMIN_REQUIRED]", "").trim()}</span>
-                              )}
+                              ))}
                             </div>
-                            <div className="instance-card-power">
-                              <button
-                                className={`button compact ${i.status === "running" ? "stop" : "start"}`}
-                                disabled={
-                                  !!busy ||
-                                  ["starting", "stopping"].includes(i.status) ||
-                                  (i.status !== "running" &&
-                                    i.component !== "php" &&
-                                    state.instances.some(
-                                      (other) =>
-                                        other.id !== i.id &&
-                                        (i.component === "nginx"
-                                          ? other.component === "nginx"
-                                          : other.packageId === i.packageId) &&
-                                        [
-                                          "running",
-                                          "starting",
-                                          "stopping",
-                                        ].includes(other.status),
-                                    ))
-                                }
-                                onClick={() =>
-                                  void action(
-                                    i.id,
-                                    () =>
-                                      call(
-                                        i.status === "running"
-                                          ? "StopInstance"
-                                          : "StartInstance",
-                                        i.id,
-                                      ),
-                                    i.status === "running"
-                                      ? "实例已停止"
-                                      : "实例已启动",
-                                  )
-                                }
-                              >
-                                {busy === i.id ? (
-                                  <LoaderCircle size={14} className="spin" />
-                                ) : i.status === "running" ? (
-                                  <Square size={13} />
-                                ) : (
-                                  <Play size={14} />
-                                )}{" "}
-                                {i.status === "running" ? "停止" : "启动"}
-                              </button>
-                            </div>
-                            <div className="instance-card-actions">
+                            {i.error && (
+                              <span className="inline-error">{i.error.replace("[ADMIN_REQUIRED]", "").trim()}</span>
+                            )}
+                            <div className="instance-footer">
                               <button
                                 className="subtle-button"
                                 disabled={!!busy}
@@ -1091,7 +1087,7 @@ export default function App() {
                                   )
                                 }
                               >
-                                <Terminal size={15} />
+                                <Terminal size={12} />
                                 日志
                               </button>
                               {i.component === "mysql" && (
@@ -1113,58 +1109,63 @@ export default function App() {
                                   凭据
                                 </button>
                               )}
+                              {i.component === "nginx" && state.sites.some(site => site.template !== "static" && site.phpId) && <button className="subtle-button" disabled={!!busy || ["starting", "stopping"].includes(i.status)} title="停止 Nginx 和本次联动启动的 PHP；复用的 PHP 保留" onClick={() => void action(`stop-linked-${i.id}`, () => call("StopNginxWithPHP", i.id), "Nginx 和本次联动 PHP 已停止，复用的 PHP 已保留")}>{i.status === "running" ? "一起停止" : "停止联动 PHP"}</button>}
                               <div className="instance-card-tail">
-                              {i.component === "nginx" && state.sites.some(site => site.template !== "static" && site.phpId) && <button className="button secondary compact" disabled={!!busy || ["starting", "stopping"].includes(i.status)} title="停止 Nginx 和本次联动启动的 PHP；复用的 PHP 保留" onClick={() => void action(`stop-linked-${i.id}`, () => call("StopNginxWithPHP", i.id), "Nginx 和本次联动 PHP 已停止，复用的 PHP 已保留")}>{i.status === "running" ? "一起停止" : "停止联动 PHP"}</button>}
-                              {i.component !== "php" ? (
-                              <button
-                                className="icon-button danger"
-                                disabled={
-                                  !!busy ||
-                                  !!i.serviceName ||
-                                  ["running", "starting", "stopping"].includes(
-                                    i.status,
-                                  )
-                                }
-                                aria-label={`删除实例 ${i.name}`}
-                                title={
-                                  i.serviceName ? "请先停止并注销系统服务" : ["running", "starting", "stopping"].includes(
-                                    i.status,
-                                  )
-                                    ? "请先停止实例"
-                                    : "删除实例及其配置、日志和数据"
-                                }
-                                onClick={() =>
-                                  setModal({
-                                    kind: "delete-instance",
-                                    instance: i,
-                                  })
-                                }
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                              ) : (
-                              <button
-                                className="icon-button danger"
-                                disabled={
-                                  !!busy ||
-                                  ["running", "starting", "stopping"].includes(
-                                    i.status,
-                                  )
-                                }
-                                aria-label={`卸载 PHP ${i.version}`}
-                                title={
-                                  ["running", "starting", "stopping"].includes(i.status)
-                                    ? "请先停止 PHP"
-                                    : "卸载此 PHP 版本，所有配置和扩展一并移除"
-                                }
-                                onClick={() => {
-                                  const pkg = state.packages.find((p) => p.id === i.id);
-                                  if (pkg) setModal({ kind: "remove", pkg });
-                                }}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                              )}
+                                <span className="instance-status">
+                                  {["running", "starting"].includes(i.status)
+                                    ? "响应正常"
+                                    : "未在运行"}
+                                </span>
+                                {i.component !== "php" ? (
+                                  <button
+                                    className="icon-button danger"
+                                    disabled={
+                                      !!busy ||
+                                      !!i.serviceName ||
+                                      ["running", "starting", "stopping"].includes(
+                                        i.status,
+                                      )
+                                    }
+                                    aria-label={`删除实例 ${i.name}`}
+                                    title={
+                                      i.serviceName ? "请先停止并注销系统服务" : ["running", "starting", "stopping"].includes(
+                                        i.status,
+                                      )
+                                        ? "请先停止实例"
+                                        : "删除实例及其配置、日志和数据"
+                                    }
+                                    onClick={() =>
+                                      setModal({
+                                        kind: "delete-instance",
+                                        instance: i,
+                                      })
+                                    }
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="icon-button danger"
+                                    disabled={
+                                      !!busy ||
+                                      ["running", "starting", "stopping"].includes(
+                                        i.status,
+                                      )
+                                    }
+                                    aria-label={`卸载 PHP ${i.version}`}
+                                    title={
+                                      ["running", "starting", "stopping"].includes(i.status)
+                                        ? "请先停止 PHP"
+                                        : "卸载此 PHP 版本，所有配置和扩展一并移除"
+                                    }
+                                    onClick={() => {
+                                      const pkg = state.packages.find((p) => p.id === i.id);
+                                      if (pkg) setModal({ kind: "remove", pkg });
+                                    }}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </article>
