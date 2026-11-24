@@ -265,6 +265,45 @@ func TestDeleteInstanceLockedDirectoryKeepsFilesAndRecord(t *testing.T) {
 	}
 }
 
+// Nginx's runtime lease is component-wide (only one Nginx may run at a time),
+// so a running Nginx must not block deleting a different, stopped Nginx.
+func TestDeleteStoppedNginxWhileAnotherNginxRuns(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("runtime lease only exists on Windows")
+	}
+	m := testManager(t)
+	pkg, err := m.ImportArchive("nginx", "fixture", writeFixture(t, testZIP(t, map[string][]byte{"nginx.exe": fakePE()})), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopped, err := m.CreateInstance(pkg.ID, "nginx-old", 19081)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, err := m.CreateInstance(pkg.ID, "nginx-active", 19082)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.setInstance(active.ID, "running", "", 4242); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate the running instance's host holding the component-wide lease.
+	lease, err := acquireRuntimeLease(m.root, active)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.release()
+	if err := m.DeleteInstance(stopped.ID); err != nil {
+		t.Fatalf("stopped Nginx blocked by another Nginx's lease: %v", err)
+	}
+	if _, err := os.Stat(stopped.Path); !os.IsNotExist(err) {
+		t.Fatalf("stopped Nginx directory remained: %v", err)
+	}
+	if _, _, err := m.lookupInstance(active.ID); err != nil {
+		t.Fatal("running Nginx record removed")
+	}
+}
+
 // PHP packages are the runtime post-merge; they are removed via RemovePackage,
 // not DeleteInstance. These cover the Task 8 guards (running / referenced by
 // site / CLI-selected) plus the happy path.

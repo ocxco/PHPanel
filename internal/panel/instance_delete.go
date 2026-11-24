@@ -36,6 +36,18 @@ func (m *Manager) DeleteInstance(key string) error {
 			}
 		}
 	}
+	// Nginx 的运行锁按组件共享（同一时间只允许一个实例运行）。当占用它的是
+	// 另一个正在运行的 Nginx 实例时，这个锁与本实例无关，不能阻止删除。
+	otherNginxRunning := false
+	if instance.Component == "nginx" {
+		for _, other := range m.state.Instances {
+			if other.Component == "nginx" && other.ID != key &&
+				(other.PID > 0 || other.Status == "running" || other.Status == "starting" || other.Status == "stopping") {
+				otherNginxRunning = true
+				break
+			}
+		}
+	}
 	if m.closing || m.operations[key] {
 		m.mu.Unlock()
 		return fmt.Errorf("实例正在变更或应用正在退出，请稍后重试")
@@ -61,9 +73,13 @@ func (m *Manager) DeleteInstance(key string) error {
 	m.mu.Unlock()
 	defer m.wg.Done()
 	defer func() { m.mu.Lock(); delete(m.operations, key); m.mu.Unlock() }()
-	lease, err := acquireRuntimeLease(m.root, instance)
-	if err != nil {
-		return err
+	lease := &runtimeLease{}
+	if !otherNginxRunning {
+		var err error
+		lease, err = acquireRuntimeLease(m.root, instance)
+		if err != nil {
+			return err
+		}
 	}
 	defer lease.release()
 	path, exists, err := m.instanceDeletePath(instance)

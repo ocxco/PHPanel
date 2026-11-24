@@ -403,7 +403,7 @@ export default function App() {
         >
           <img className="brand-logo brand-logo-light" src={logoLight} alt="PHPanel" width={300} height={132} draggable={false} />
           <img className="brand-logo brand-logo-dark" src={logoDark} alt="PHPanel" width={300} height={132} draggable={false} />
-          <span className="brand-version">v0.1.0</span>
+          <span className="brand-version">v{__APP_VERSION__}</span>
         </a>
         <div className="workspace-card" aria-label="当前工作空间">
           <span><Globe2 size={15} /></span>
@@ -443,7 +443,7 @@ export default function App() {
           </div>
           <div className="sidebar-foot">
             <span>PHPanel</span>
-            <span>v0.1.0</span>
+            <span>v{__APP_VERSION__}</span>
           </div>
         </div>
       </aside>

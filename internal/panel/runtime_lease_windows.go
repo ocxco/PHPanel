@@ -66,7 +66,7 @@ func acquireRuntimeLease(root string, i Instance) (*runtimeLease, error) {
 }
 
 func (l *runtimeLease) release() {
-	if l != nil {
+	if l != nil && l.stop != nil {
 		l.once.Do(func() { close(l.stop); <-l.done })
 	}
 }
