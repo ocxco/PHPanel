@@ -14,8 +14,8 @@ import {
   CheckCircle2,
   Copy,
   ChevronRight,
+  ChevronDown,
   CircleHelp,
-  Database,
   Download,
   FolderOpen,
   Globe2,
@@ -31,6 +31,7 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  SlidersHorizontal,
   Sun,
   Moon,
   Monitor,
@@ -175,9 +176,9 @@ function ComponentMark({
       ) : type === "nginx" ? (
         "N"
       ) : type === "mysql" ? (
-        <Database size={small ? 18 : 25} />
+        "SQL"
       ) : (
-        <Layers3 size={small ? 18 : 25} />
+        "R"
       )}
     </span>
   );
@@ -304,12 +305,20 @@ export default function App() {
       setBusy("");
     }
   }
-  const running =
-      state.instances.filter((i) => i.status === "running").length +
-      state.packages.filter((p) => p.component === "php" && p.status === "running").length,
-    activeDownloads = state.tasks.filter((t) =>
-      ["downloading", "installing", "verifying"].includes(t.status),
-    ).length;
+  const phpRuntimes = state.packages.filter((p) => p.component === "php");
+  const serviceInstances = state.instances.filter(
+    (i) => i.component !== "php",
+  );
+  // All "运行实例": legacy instances + PHP packages (package == runtime).
+  // The UI treats them uniformly in the 实例管理 view.
+  const allInstances = [
+    ...serviceInstances,
+    ...phpRuntimes.map(phpPackageAsInstance),
+  ];
+  const running = allInstances.filter((i) => i.status === "running").length;
+  const activeDownloads = state.tasks.filter((t) =>
+    ["downloading", "installing", "verifying"].includes(t.status),
+  ).length;
   const findPackage = (a: Artifact) =>
     state.packages.find(
       (p) =>
@@ -339,10 +348,6 @@ export default function App() {
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
-  const phpRuntimes = state.packages.filter((p) => p.component === "php");
-  const serviceInstances = state.instances.filter(
-    (i) => i.component !== "php",
-  );
   const currentNav = nav.find((n) => n.id === view)!;
   const pageCount = Math.max(1, Math.ceil(artifacts.length / 30));
   function install(a: Artifact) {
@@ -361,11 +366,10 @@ export default function App() {
         <button
           className="button compact secondary"
           onClick={() => {
-            setView("environments");
-            setTab("installed");
+            setView("instances");
           }}
         >
-          <Play size={14} /> 管理运行时
+          <Layers3 size={14} /> 管理实例
         </button>
       );
     }
@@ -399,7 +403,16 @@ export default function App() {
         >
           <img className="brand-logo brand-logo-light" src={logoLight} alt="PHPanel" width={300} height={132} draggable={false} />
           <img className="brand-logo brand-logo-dark" src={logoDark} alt="PHPanel" width={300} height={132} draggable={false} />
+          <span className="brand-version">v0.1.0</span>
         </a>
+        <div className="workspace-card" aria-label="当前工作空间">
+          <span><Globe2 size={15} /></span>
+          <div>
+            <strong>本地工作空间</strong>
+            <small>{desktop() ? "Windows · x64" : "浏览器预览"}</small>
+          </div>
+          <ChevronDown size={14} />
+        </div>
         <div className="workspace-label">
           工作空间 <span>01</span>
         </div>
@@ -580,24 +593,18 @@ export default function App() {
                       </span>
                       <span
                         className={
-                          state.instances.some(
+                          allInstances.some(
                             (i) => i.component === c && i.status === "running",
-                          ) ||
-                          (c === "php" &&
-                            phpRuntimes.some((p) => p.status === "running"))
+                          )
                             ? "running-note"
                             : "quiet-note"
                         }
                       >
                         <i />
                         {
-                          state.instances.filter(
+                          allInstances.filter(
                             (i) => i.component === c && i.status === "running",
-                          ).length +
-                            (c === "php"
-                              ? phpRuntimes.filter((p) => p.status === "running")
-                                  .length
-                              : 0)
+                          ).length
                         }{" "}
                         运行中
                       </span>
@@ -792,97 +799,7 @@ export default function App() {
                   </>
                 ) : (
                   <>
-                    {packages.map((p) =>
-                      p.component === "php" ? (
-                        <div className="package-row runtime" key={p.id}>
-                          <ComponentMark type="php" />
-                          <div className="package-details">
-                            <strong>
-                              PHP <span className="mono">{p.version}</span>
-                            </strong>
-                            <span className="package-path">{p.path}</span>
-                          </div>
-                          <Badge status={p.status || "stopped"} />
-                          <span className="mono small">
-                            {p.port ? `127.0.0.1:${p.port}` : "未分配端口"}
-                            {p.pid ? ` · PID ${p.pid}` : ""}
-                          </span>
-                          <button
-                            className="button compact"
-                            disabled={!!busy}
-                            onClick={() =>
-                              void action(
-                                `php-power-${p.id}`,
-                                () =>
-                                  p.status === "running"
-                                    ? call("StopInstance", p.id)
-                                    : call("StartInstance", p.id),
-                                p.status === "running" ? "已停止" : "PHP 已启动",
-                              )
-                            }
-                          >
-                            {p.status === "running" ? (
-                              <Square size={14} />
-                            ) : (
-                              <Play size={14} />
-                            )}
-                            {p.status === "running" ? "停止" : "启动"}
-                          </button>
-                          <button
-                            className="subtle-button"
-                            disabled={!!busy}
-                            onClick={() =>
-                              void action(`php-log-${p.id}`, () =>
-                                call("OpenLocation", "logs", p.id),
-                              )
-                            }
-                          >
-                            <Terminal size={15} /> 日志
-                          </button>
-                          <button
-                            className="subtle-button"
-                            disabled={!!busy}
-                            onClick={() =>
-                              setModal({
-                                kind: "php-extensions",
-                                instance: phpPackageAsInstance(p),
-                              })
-                            }
-                          >
-                            <Pencil size={15} /> 扩展
-                          </button>
-                          <button
-                            className="subtle-button"
-                            disabled={!!busy}
-                            onClick={() =>
-                              setModal({
-                                kind: "config",
-                                instance: phpPackageAsInstance(p),
-                              })
-                            }
-                          >
-                            <Pencil size={15} /> 配置
-                          </button>
-                          <button
-                            className="subtle-button"
-                            disabled={!!busy}
-                            onClick={() =>
-                              void action(`php-dir-${p.id}`, () =>
-                                call("OpenLocation", "package", p.id),
-                              )
-                            }
-                          >
-                            <FolderOpen size={15} /> 目录
-                          </button>
-                          <button
-                            className="icon-button danger"
-                            aria-label={`卸载 PHP ${p.version}`}
-                            onClick={() => setModal({ kind: "remove", pkg: p })}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      ) : (
+                    {packages.map((p) => (
                         <div className="package-row" key={p.id}>
                           <ComponentMark type={p.component} />
                           <div className="package-details">
@@ -917,8 +834,7 @@ export default function App() {
                             <Trash2 size={16} />
                           </button>
                         </div>
-                      ),
-                    )}
+                      ))}
                     {packages.length === 0 && (
                       <Empty
                         icon={<PackagePlus size={25} />}
@@ -989,18 +905,18 @@ export default function App() {
             <section className="panel">
               <div className="section-label">
                 <h2>
-                  服务实例 <span>{serviceInstances.length}</span>
+                  服务实例 <span>{allInstances.length}</span>
                 </h2>
                 <span className="running-note">
                   <i />
                   {running} 个正在运行
                 </span>
               </div>
-              {serviceInstances.length === 0 ? (
+              {allInstances.length === 0 ? (
                 <Empty
                   icon={<Layers3 size={26} />}
-                  title="还没有服务实例"
-                  text="先安装一个版本，再为它创建独立的运行实例。"
+                  title="还没有运行实例"
+                  text="下载并安装组件版本后，会自动出现在这里。"
                   action={
                     <button
                       className="button primary"
@@ -1016,7 +932,7 @@ export default function App() {
                 />
               ) : (
                 components.map((component) => {
-                  const group = serviceInstances
+                  const group = allInstances
                     .filter((i) => i.component === component)
                     .sort((a, b) =>
                       b.version.localeCompare(a.version, undefined, {
@@ -1027,7 +943,10 @@ export default function App() {
                   return (
                     <section className="service-group" key={component}>
                       <div className="service-group-heading">
-                        <h3>{label[component]}</h3>
+                        <h3>
+                          <ComponentMark type={component} small />
+                          {label[component]}
+                        </h3>
                         <span>
                           {group.length} 个实例 ·{" "}
                           {group.filter((i) => i.status === "running").length}{" "}
@@ -1041,6 +960,7 @@ export default function App() {
                             <div className="instance-info">
                               <strong>
                                 {i.name}
+                                <Badge status={i.status} />
                                 {i.name !==
                                   `${label[i.component]} ${i.version}` && (
                                   <span className="mono">
@@ -1110,49 +1030,14 @@ export default function App() {
                                 <span className="inline-error">{i.error.replace("[ADMIN_REQUIRED]", "").trim()}</span>
                               )}
                             </div>
-                            <Badge status={i.status} />
-                            <div className="instance-card-actions">
+                            <div className="instance-card-power">
                               <button
-                                className="subtle-button"
-                                disabled={!!busy}
-                                onClick={() =>
-                                  void action("logs", async () =>
-                                    setModal({
-                                      kind: "text",
-                                      title: `${i.name} · 日志`,
-                                      text: await call<string>("ReadLog", i.id),
-                                    }),
-                                  )
-                                }
-                              >
-                                <Terminal size={15} />
-                                日志
-                              </button>
-                              {i.component === "mysql" && (
-                                <button
-                                  className="subtle-button"
-                                  onClick={() =>
-                                    void action("credentials", async () =>
-                                      setModal({
-                                        kind: "text",
-                                        title: `${i.name} · 数据库凭据`,
-                                        text: await call<string>(
-                                          "Credentials",
-                                          i.id,
-                                        ),
-                                      }),
-                                    )
-                                  }
-                                >
-                                  凭据
-                                </button>
-                              )}
-                              <button
-                                className={`button compact ${i.status === "running" ? "secondary" : "primary"}`}
+                                className={`button compact ${i.status === "running" ? "stop" : "start"}`}
                                 disabled={
                                   !!busy ||
                                   ["starting", "stopping"].includes(i.status) ||
                                   (i.status !== "running" &&
+                                    i.component !== "php" &&
                                     state.instances.some(
                                       (other) =>
                                         other.id !== i.id &&
@@ -1191,7 +1076,46 @@ export default function App() {
                                 )}{" "}
                                 {i.status === "running" ? "停止" : "启动"}
                               </button>
+                            </div>
+                            <div className="instance-card-actions">
+                              <button
+                                className="subtle-button"
+                                disabled={!!busy}
+                                onClick={() =>
+                                  void action("logs", async () =>
+                                    setModal({
+                                      kind: "text",
+                                      title: `${i.name} · 日志`,
+                                      text: await call<string>("ReadLog", i.id),
+                                    }),
+                                  )
+                                }
+                              >
+                                <Terminal size={15} />
+                                日志
+                              </button>
+                              {i.component === "mysql" && (
+                                <button
+                                  className="subtle-button"
+                                  onClick={() =>
+                                    void action("credentials", async () =>
+                                      setModal({
+                                        kind: "text",
+                                        title: `${i.name} · 数据库凭据`,
+                                        text: await call<string>(
+                                          "Credentials",
+                                          i.id,
+                                        ),
+                                      }),
+                                    )
+                                  }
+                                >
+                                  凭据
+                                </button>
+                              )}
+                              <div className="instance-card-tail">
                               {i.component === "nginx" && state.sites.some(site => site.template !== "static" && site.phpId) && <button className="button secondary compact" disabled={!!busy || ["starting", "stopping"].includes(i.status)} title="停止 Nginx 和本次联动启动的 PHP；复用的 PHP 保留" onClick={() => void action(`stop-linked-${i.id}`, () => call("StopNginxWithPHP", i.id), "Nginx 和本次联动 PHP 已停止，复用的 PHP 已保留")}>{i.status === "running" ? "一起停止" : "停止联动 PHP"}</button>}
+                              {i.component !== "php" ? (
                               <button
                                 className="icon-button danger"
                                 disabled={
@@ -1218,6 +1142,30 @@ export default function App() {
                               >
                                 <Trash2 size={16} />
                               </button>
+                              ) : (
+                              <button
+                                className="icon-button danger"
+                                disabled={
+                                  !!busy ||
+                                  ["running", "starting", "stopping"].includes(
+                                    i.status,
+                                  )
+                                }
+                                aria-label={`卸载 PHP ${i.version}`}
+                                title={
+                                  ["running", "starting", "stopping"].includes(i.status)
+                                    ? "请先停止 PHP"
+                                    : "卸载此 PHP 版本，所有配置和扩展一并移除"
+                                }
+                                onClick={() => {
+                                  const pkg = state.packages.find((p) => p.id === i.id);
+                                  if (pkg) setModal({ kind: "remove", pkg });
+                                }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                              )}
+                              </div>
                             </div>
                           </article>
                         ))}
@@ -1234,7 +1182,7 @@ export default function App() {
                 <Globe2 size={17} /> 使用 .localhost 域名，无需修改
                 hosts。网站变更会先检查配置，运行中的 Nginx 会自动重载。
               </div>
-              <section className="panel">
+              <section className={`panel${state.sites.length ? " site-list" : ""}`}>
                 {state.sites.length === 0 ? (
                   <Empty
                     icon={<Globe2 size={26} />}
@@ -1263,23 +1211,24 @@ export default function App() {
                         </strong>
                         <span>{s.root}</span>
                       </div>
-                      <span className="muted">
-                        {templates[s.template] || "通用 PHP"}
+                      <span className="site-tags">
+                        <span className="tag">
+                          {templates[s.template] || "通用 PHP"}
+                        </span>
                         {s.template !== "static" && (
-                          <>
-                            {" "}
-                            · PHP{" "}
+                          <span className="tag php">
+                            PHP{" "}
                             {
                               state.packages.find((p) => p.id === s.phpId)
                                 ?.version ||
                               state.instances.find((i) => i.id === s.phpId)
                                 ?.version
                             }
-                          </>
+                          </span>
                         )}
                       </span>
                       <button
-                        className="subtle-button"
+                        className="button compact ghost"
                         disabled={!!busy}
                         onClick={() => {
                           const instance =
@@ -1303,7 +1252,7 @@ export default function App() {
                             });
                         }}
                       >
-                        <Pencil size={14} />
+                        <SlidersHorizontal size={13} />
                         配置
                       </button>
                       <button
@@ -1326,7 +1275,7 @@ export default function App() {
                         <Trash2 size={16} />
                       </button>
                       <button
-                        className="button compact secondary"
+                        className="button compact site-open"
                         onClick={() =>
                           void action(s.id, () => call("OpenSite", s.id))
                         }
@@ -1387,7 +1336,7 @@ export default function App() {
                               ` · ${bytes(t.speed)}/s`}
                           </span>
                         </p>
-                        <div className="progress-track">
+                        <div className={`progress-track ${t.status}`}>
                           <span
                             style={{
                               width: `${t.status === "completed" ? 100 : t.total > 0 ? Math.min(100, (t.received / t.total) * 100) : 0}%`,
@@ -1679,6 +1628,9 @@ function SettingsPanel({
               className={`theme-option ${themeMode === option.mode ? "selected" : ""}`}
               onClick={() => changeTheme(option.mode)}
             >
+              {themeMode === option.mode && (
+                <span className="theme-current">当前使用</span>
+              )}
               <div className={`theme-preview ${option.mode}`}>
                 <i />
                 <span />
@@ -1687,7 +1639,6 @@ function SettingsPanel({
               <div className="theme-option-label">
                 <option.icon size={16} />
                 <strong>{option.text}</strong>
-                {themeMode === option.mode && <Check size={16} />}
               </div>
               <small>{option.description}</small>
             </button>
